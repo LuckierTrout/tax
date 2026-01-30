@@ -11,6 +11,40 @@ interface LayoutOptions {
   nodeSep?: number;
 }
 
+// Dynamic spacing constants
+const BASE_NODE_SEP = 60;  // Max horizontal spacing (small/sparse trees)
+const MIN_NODE_SEP = 40;   // Min horizontal spacing (large/dense trees) - ensures readable gaps
+const BASE_RANK_SEP = 200; // Max vertical spacing (shallow trees)
+const MIN_RANK_SEP = 170;  // Min vertical spacing (deep trees) - ensures readable gaps
+
+// Calculate dynamic spacing based on tree characteristics
+function calculateDynamicSpacing(
+  nodeCount: number,
+  maxDepth: number,
+  maxWidth: number
+): { nodeSep: number; rankSep: number } {
+  // Vertical scaling based on depth (1-5 levels)
+  // At depth 5, rankSep compresses to minimum
+  const depthScale = Math.max(0, Math.min(1, (5 - maxDepth) / 4));
+
+  // Horizontal scaling based on max siblings at any level
+  // At width 15+, nodeSep compresses to minimum
+  const widthScale = Math.max(0, Math.min(1, (15 - maxWidth) / 14));
+
+  // Overall density scaling based on total node count
+  // At 100+ nodes, both compress to minimum
+  const countScale = Math.max(0, Math.min(1, (100 - nodeCount) / 80));
+
+  // Combine factors - use the more restrictive scale for each axis
+  const nodeSep = MIN_NODE_SEP + (BASE_NODE_SEP - MIN_NODE_SEP) * Math.min(widthScale, countScale);
+  const rankSep = MIN_RANK_SEP + (BASE_RANK_SEP - MIN_RANK_SEP) * Math.min(depthScale, countScale);
+
+  return {
+    nodeSep: Math.round(nodeSep),
+    rankSep: Math.round(rankSep)
+  };
+}
+
 // Improved tree layout that aligns nodes by level (like an org chart)
 function calculateTreeLayout(
   nodes: Node[],
@@ -19,9 +53,6 @@ function calculateTreeLayout(
 ): Node[] {
   const {
     nodeWidth = 180,
-    nodeHeight = 70,
-    rankSep = 120,  // Vertical spacing between levels
-    nodeSep = 40,   // Horizontal spacing between nodes
   } = options;
 
   if (nodes.length === 0) return nodes;
@@ -52,6 +83,19 @@ function calculateTreeLayout(
 
   roots.forEach((root) => setDepth(root.id, 0));
 
+  // Calculate tree characteristics for dynamic spacing
+  const maxDepth = nodes.length > 0
+    ? Math.max(...Array.from(nodeDepth.values())) + 1
+    : 1;
+  const maxWidth = childrenMap.size > 0
+    ? Math.max(...Array.from(childrenMap.values()).map(c => c.length), 1)
+    : 1;
+
+  // Get dynamic spacing based on tree size and shape
+  const { nodeSep, rankSep } = options.nodeSep !== undefined && options.rankSep !== undefined
+    ? { nodeSep: options.nodeSep, rankSep: options.rankSep }  // Use provided values if explicit
+    : calculateDynamicSpacing(nodes.length, maxDepth, maxWidth);
+
   // Group nodes by level
   const nodesByLevel = new Map<number, string[]>();
   nodes.forEach((node) => {
@@ -62,79 +106,54 @@ function calculateTreeLayout(
     nodesByLevel.get(depth)!.push(node.id);
   });
 
-  // Calculate the width needed for each subtree
-  const subtreeWidth = new Map<string, number>();
-
-  function calcSubtreeWidth(nodeId: string): number {
-    const children = childrenMap.get(nodeId) || [];
-    if (children.length === 0) {
-      subtreeWidth.set(nodeId, nodeWidth);
-      return nodeWidth;
-    }
-
-    const childrenTotalWidth = children.reduce((sum, childId) => {
-      return sum + calcSubtreeWidth(childId);
-    }, 0) + (children.length - 1) * nodeSep;
-
-    const width = Math.max(nodeWidth, childrenTotalWidth);
-    subtreeWidth.set(nodeId, width);
-    return width;
-  }
-
-  roots.forEach((root) => calcSubtreeWidth(root.id));
-
-  // Position nodes
+  // BOTTOM-UP LAYOUT: Start with leaves, work up to roots
   const positions = new Map<string, { x: number; y: number }>();
 
-  function positionSubtree(nodeId: string, centerX: number, y: number): void {
-    // Position this node at the center
-    positions.set(nodeId, { x: centerX, y });
-
+  // Collect all leaf nodes in left-to-right order (DFS traversal)
+  const leafNodes: string[] = [];
+  function collectLeaves(nodeId: string): void {
     const children = childrenMap.get(nodeId) || [];
-    if (children.length === 0) return;
-
-    // Calculate total width of all children
-    const childWidths = children.map((id) => subtreeWidth.get(id) || nodeWidth);
-    const totalChildrenWidth = childWidths.reduce((sum, w) => sum + w, 0) +
-      (children.length - 1) * nodeSep;
-
-    // Position children centered under this node
-    let currentX = centerX - totalChildrenWidth / 2;
-
-    children.forEach((childId, i) => {
-      const childWidth = childWidths[i];
-      const childCenterX = currentX + childWidth / 2;
-      positionSubtree(childId, childCenterX, y + rankSep);
-      currentX += childWidth + nodeSep;
-    });
+    if (children.length === 0) {
+      leafNodes.push(nodeId);
+    } else {
+      children.forEach(collectLeaves);
+    }
   }
+  roots.forEach((root) => collectLeaves(root.id));
 
-  // Position all root trees
-  const rootWidths = roots.map((r) => subtreeWidth.get(r.id) || nodeWidth);
-  const totalWidth = rootWidths.reduce((sum, w) => sum + w, 0) +
-    (roots.length - 1) * nodeSep * 2;
+  // Position leaf nodes evenly spaced
+  const totalLeafWidth = leafNodes.length * nodeWidth + (leafNodes.length - 1) * nodeSep;
+  let leafX = -totalLeafWidth / 2 + nodeWidth / 2;
 
-  let currentX = -totalWidth / 2;
-
-  roots.forEach((root, i) => {
-    const rootWidth = rootWidths[i];
-    const centerX = currentX + rootWidth / 2;
-    positionSubtree(root.id, centerX, 0);
-    currentX += rootWidth + nodeSep * 2;
+  leafNodes.forEach((leafId) => {
+    const depth = nodeDepth.get(leafId) ?? 0;
+    positions.set(leafId, { x: leafX, y: depth * rankSep });
+    leafX += nodeWidth + nodeSep;
   });
 
-  // IMPORTANT: Ensure all nodes at the same level have the same Y position
-  // This creates the horizontal alignment you want
+  // Work bottom-up: position each parent at the center of its children
   const maxLevels = Math.max(...Array.from(nodeDepth.values())) + 1;
 
-  for (let level = 0; level < maxLevels; level++) {
+  for (let level = maxLevels - 2; level >= 0; level--) {
     const nodesAtLevel = nodesByLevel.get(level) || [];
-    const y = level * rankSep;
 
     nodesAtLevel.forEach((nodeId) => {
-      const pos = positions.get(nodeId);
-      if (pos) {
-        positions.set(nodeId, { x: pos.x, y });
+      const children = childrenMap.get(nodeId) || [];
+
+      if (children.length > 0) {
+        // Position parent at center of its children's X positions
+        const childXPositions = children.map((childId) => {
+          const pos = positions.get(childId);
+          return pos ? pos.x : 0;
+        });
+        const centerX = (Math.min(...childXPositions) + Math.max(...childXPositions)) / 2;
+        positions.set(nodeId, { x: centerX, y: level * rankSep });
+      } else {
+        // Leaf node already positioned
+        const pos = positions.get(nodeId);
+        if (pos) {
+          positions.set(nodeId, { x: pos.x, y: level * rankSep });
+        }
       }
     });
   }
