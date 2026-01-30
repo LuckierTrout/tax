@@ -1,0 +1,209 @@
+{
+  "metadata": {
+    "version": "1.0.0",
+    "lastModified": "2026-01-30T14:54:06.340Z"
+  },
+  "nodes": [
+    {
+      "id": "p1",
+      "name": "Technology & Innovation",
+      "description": "All communications related to technology initiatives, digital innovation, and IT transformation.",
+      "parentId": null,
+      "level": "pillar",
+      "order": 0,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2026-01-30T14:42:19.520Z",
+      "objective": "asdfasdf"
+    },
+    {
+      "id": "p2",
+      "name": "Sustainability",
+      "description": "Environmental and social sustainability communications.",
+      "parentId": null,
+      "level": "pillar",
+      "order": 1,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    },
+    {
+      "id": "p3",
+      "name": "Corporate Governance",
+      "description": "Governance, compliance, and ethics communications.",
+      "parentId": null,
+      "level": "pillar",
+      "order": 2,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    },
+    {
+      "id": "p4",
+      "name": "Market Leadership",
+      "description": "Market position, competitive advantage, and industry leadership communications.",
+      "parentId": null,
+      "level": "pillar",
+      "order": 3,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    },
+    {
+      "id": "nt1",
+      "name": "Digital Transformation",
+      "description": "Digital initiatives and modernization efforts.",
+      "parentId": "p1",
+      "level": "narrative_theme",
+      "order": 0,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    },
+    {
+      "id": "nt2",
+      "name": "Cybersecurity",
+      "description": "Security, privacy, and data protection initiatives.",
+      "parentId": "p1",
+      "level": "narrative_theme",
+      "order": 1,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    },
+    {
+      "id": "nt3",
+      "name": "Environmental Impact",
+      "description": "Environmental sustainability and carbon reduction.",
+      "parentId": "p2",
+      "level": "narrative_theme",
+      "order": 0,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    },
+    {
+      "id": "nt4",
+      "name": "Social Responsibility",
+      "description": "Community engagement and social initiatives.",
+      "parentId": "p2",
+      "level": "narrative_theme",
+      "order": 1,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    },
+    {
+      "id": "s1",
+      "name": "AI & Automation",
+      "description": "Artificial intelligence and automation initiatives.",
+      "parentId": "nt1",
+      "level": "subject",
+      "order": 0,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    },
+    {
+      "id": "s2",
+      "name": "Cloud Computing",
+      "description": "Cloud infrastructure and services.",
+      "parentId": "nt1",
+      "level": "subject",
+      "order": 1,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    },
+    {
+      "id": "s3",
+      "name": "Threat Protection",
+      "description": "Security threat detection and prevention.",
+      "parentId": "nt2",
+      "level": "subject",
+      "order": 0,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    },
+    {
+      "id": "s4",
+      "name": "Carbon Reduction",
+      "description": "Carbon footprint reduction initiatives.",
+      "parentId": "nt3",
+      "level": "subject",
+      "order": 0,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    },
+    {
+      "id": "t1",
+      "name": "Machine Learning",
+      "description": "ML models and applications.",
+      "parentId": "s1",
+      "level": "topic",
+      "order": 0,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    },
+    {
+      "id": "t2",
+      "name": "Process Automation",
+      "description": "RPA and workflow automation.",
+      "parentId": "s1",
+      "level": "topic",
+      "order": 1,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    },
+    {
+      "id": "t3",
+      "name": "Infrastructure",
+      "description": "Cloud infrastructure services.",
+      "parentId": "s2",
+      "level": "topic",
+      "order": 0,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    },
+    {
+      "id": "st1",
+      "name": "Predictive Analytics",
+      "description": "ML-based predictive models.",
+      "parentId": "t1",
+      "level": "subtopic",
+      "order": 0,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    },
+    {
+      "id": "st2",
+      "name": "Natural Language Processing",
+      "description": "NLP and text analysis.",
+      "parentId": "t1",
+      "level": "subtopic",
+      "order": 1,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    },
+    {
+      "id": "st3",
+      "name": "RPA Tools",
+      "description": "Robotic process automation tools.",
+      "parentId": "t2",
+      "level": "subtopic",
+      "order": 0,
+      "createdAt": "2024-01-30T10:00:00Z",
+      "updatedAt": "2024-01-30T10:00:00Z"
+    }
+  ],
+  "settings": {
+    "availableAudiences": [
+      "Internal Employees",
+      "Executives",
+      "Investors",
+      "Media",
+      "Customers",
+      "Partners",
+      "Government",
+      "General Public"
+    ],
+    "availableGeographies": [
+      "Global",
+      "North America",
+      "Europe",
+      "Asia Pacific",
+      "Latin America",
+      "Middle East & Africa"
+    ]
+  }
+}
