@@ -1,8 +1,21 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { TaxonomyData, TaxonomyNode, TaxonomySettings } from '@/types/taxonomy';
+import {
+  initializeDatabase,
+  getAllNodesFromDb,
+  getNodeByIdFromDb,
+  createNodeInDb,
+  updateNodeInDb,
+  deleteNodeFromDb,
+  getSettingsFromDb,
+  updateSettingsInDb,
+} from './db';
 
-// Use /tmp on Vercel (serverless), project directory locally
+// Check if we should use database
+const useDatabase = !!process.env.DATABASE_URL;
+
+// File-based storage paths (fallback for local dev without database)
 const isVercel = process.env.VERCEL === '1';
 const DATA_DIR = isVercel ? '/tmp' : path.join(process.cwd(), 'data');
 const DATA_FILE_PATH = path.join(DATA_DIR, 'taxonomy.json');
@@ -38,69 +51,83 @@ const DEFAULT_DATA: TaxonomyData = {
   nodes: [],
 };
 
-export async function readTaxonomyData(): Promise<TaxonomyData> {
+// Initialize database on first use
+let dbInitialized = false;
+async function ensureDbInitialized(): Promise<void> {
+  if (!dbInitialized && useDatabase) {
+    await initializeDatabase();
+    dbInitialized = true;
+  }
+}
+
+// File-based storage functions
+async function readTaxonomyDataFromFile(): Promise<TaxonomyData> {
   try {
     const fileContent = await fs.readFile(DATA_FILE_PATH, 'utf-8');
     const data = JSON.parse(fileContent) as TaxonomyData;
 
-    // Migration: Add settings if they don't exist (for existing data files)
     if (!data.settings) {
       data.settings = DEFAULT_SETTINGS;
-      await writeTaxonomyData(data);
+      await writeTaxonomyDataToFile(data);
     }
 
     return data;
   } catch (error) {
-    // If file doesn't exist in /tmp (Vercel), try to copy from source
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       if (isVercel) {
         try {
-          // Try to copy initial data from build directory to /tmp
           const sourceContent = await fs.readFile(SOURCE_FILE_PATH, 'utf-8');
           await fs.mkdir(DATA_DIR, { recursive: true });
           await fs.writeFile(DATA_FILE_PATH, sourceContent, 'utf-8');
           return JSON.parse(sourceContent) as TaxonomyData;
         } catch {
-          // If source doesn't exist either, create default
-          await writeTaxonomyData(DEFAULT_DATA);
+          await writeTaxonomyDataToFile(DEFAULT_DATA);
           return DEFAULT_DATA;
         }
       }
-      await writeTaxonomyData(DEFAULT_DATA);
+      await writeTaxonomyDataToFile(DEFAULT_DATA);
       return DEFAULT_DATA;
     }
     throw error;
   }
 }
 
-export async function writeTaxonomyData(data: TaxonomyData): Promise<void> {
-  // Ensure directory exists
+async function writeTaxonomyDataToFile(data: TaxonomyData): Promise<void> {
   const dir = path.dirname(DATA_FILE_PATH);
   await fs.mkdir(dir, { recursive: true });
-
-  // Update metadata
   data.metadata.lastModified = new Date().toISOString();
-
-  // Write atomically using a temp file
   const tempPath = `${DATA_FILE_PATH}.tmp`;
   await fs.writeFile(tempPath, JSON.stringify(data, null, 2), 'utf-8');
   await fs.rename(tempPath, DATA_FILE_PATH);
 }
 
+// Unified storage interface
 export async function getAllNodes(): Promise<TaxonomyNode[]> {
-  const data = await readTaxonomyData();
+  if (useDatabase) {
+    await ensureDbInitialized();
+    return getAllNodesFromDb();
+  }
+  const data = await readTaxonomyDataFromFile();
   return data.nodes;
 }
 
 export async function getNodeById(id: string): Promise<TaxonomyNode | null> {
-  const data = await readTaxonomyData();
+  if (useDatabase) {
+    await ensureDbInitialized();
+    return getNodeByIdFromDb(id);
+  }
+  const data = await readTaxonomyDataFromFile();
   return data.nodes.find((n) => n.id === id) || null;
 }
 
 export async function createNode(node: TaxonomyNode): Promise<TaxonomyNode> {
-  const data = await readTaxonomyData();
+  if (useDatabase) {
+    await ensureDbInitialized();
+    return createNodeInDb(node);
+  }
+  const data = await readTaxonomyDataFromFile();
   data.nodes.push(node);
-  await writeTaxonomyData(data);
+  await writeTaxonomyDataToFile(data);
   return node;
 }
 
@@ -108,7 +135,11 @@ export async function updateNode(
   id: string,
   updates: Partial<TaxonomyNode>
 ): Promise<TaxonomyNode | null> {
-  const data = await readTaxonomyData();
+  if (useDatabase) {
+    await ensureDbInitialized();
+    return updateNodeInDb(id, updates);
+  }
+  const data = await readTaxonomyDataFromFile();
   const index = data.nodes.findIndex((n) => n.id === id);
 
   if (index === -1) return null;
@@ -119,23 +150,25 @@ export async function updateNode(
     updatedAt: new Date().toISOString(),
   };
 
-  await writeTaxonomyData(data);
+  await writeTaxonomyDataToFile(data);
   return data.nodes[index];
 }
 
 export async function deleteNode(id: string): Promise<string[]> {
-  const data = await readTaxonomyData();
+  if (useDatabase) {
+    await ensureDbInitialized();
+    return deleteNodeFromDb(id);
+  }
+  const data = await readTaxonomyDataFromFile();
 
-  // Get all descendant IDs
   const getDescendants = (nodeId: string): string[] => {
     const children = data.nodes.filter((n) => n.parentId === nodeId);
     return children.flatMap((child) => [child.id, ...getDescendants(child.id)]);
   };
 
   const idsToDelete = [id, ...getDescendants(id)];
-
   data.nodes = data.nodes.filter((n) => !idsToDelete.includes(n.id));
-  await writeTaxonomyData(data);
+  await writeTaxonomyDataToFile(data);
 
   return idsToDelete;
 }
@@ -145,22 +178,19 @@ export async function reorderNodes(
   newParentId: string | null | undefined,
   newOrder: number
 ): Promise<TaxonomyNode[]> {
-  const data = await readTaxonomyData();
+  // For now, keep file-based implementation (can be added to DB later)
+  const data = await readTaxonomyDataFromFile();
   const node = data.nodes.find((n) => n.id === nodeId);
 
   if (!node) throw new Error('Node not found');
 
-  // If changing parent, update parentId and level
   if (newParentId !== undefined && newParentId !== node.parentId) {
     node.parentId = newParentId;
-    // Note: Level should be recalculated based on new parent
   }
 
-  // Update order
   node.order = newOrder;
   node.updatedAt = new Date().toISOString();
 
-  // Re-index siblings
   const siblings = data.nodes
     .filter((n) => n.parentId === node.parentId && n.id !== nodeId)
     .sort((a, b) => a.order - b.order);
@@ -170,24 +200,50 @@ export async function reorderNodes(
     s.order = i;
   });
 
-  await writeTaxonomyData(data);
+  await writeTaxonomyDataToFile(data);
   return data.nodes;
 }
 
 // Settings functions
 export async function getSettings(): Promise<TaxonomySettings> {
-  const data = await readTaxonomyData();
+  if (useDatabase) {
+    await ensureDbInitialized();
+    return getSettingsFromDb();
+  }
+  const data = await readTaxonomyDataFromFile();
   return data.settings;
 }
 
 export async function updateSettings(
   settings: Partial<TaxonomySettings>
 ): Promise<TaxonomySettings> {
-  const data = await readTaxonomyData();
+  if (useDatabase) {
+    await ensureDbInitialized();
+    return updateSettingsInDb(settings);
+  }
+  const data = await readTaxonomyDataFromFile();
   data.settings = {
     ...data.settings,
     ...settings,
   };
-  await writeTaxonomyData(data);
+  await writeTaxonomyDataToFile(data);
   return data.settings;
+}
+
+// Legacy exports for compatibility
+export async function readTaxonomyData(): Promise<TaxonomyData> {
+  const nodes = await getAllNodes();
+  const settings = await getSettings();
+  return {
+    metadata: {
+      version: '1.0.0',
+      lastModified: new Date().toISOString(),
+    },
+    settings,
+    nodes,
+  };
+}
+
+export async function writeTaxonomyData(data: TaxonomyData): Promise<void> {
+  await writeTaxonomyDataToFile(data);
 }
