@@ -2,7 +2,11 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { TaxonomyData, TaxonomyNode, TaxonomySettings } from '@/types/taxonomy';
 
-const DATA_FILE_PATH = path.join(process.cwd(), 'data', 'taxonomy.json');
+// Use /tmp on Vercel (serverless), project directory locally
+const isVercel = process.env.VERCEL === '1';
+const DATA_DIR = isVercel ? '/tmp' : path.join(process.cwd(), 'data');
+const DATA_FILE_PATH = path.join(DATA_DIR, 'taxonomy.json');
+const SOURCE_FILE_PATH = path.join(process.cwd(), 'data', 'taxonomy.json');
 
 const DEFAULT_SETTINGS: TaxonomySettings = {
   availableAudiences: [
@@ -47,8 +51,21 @@ export async function readTaxonomyData(): Promise<TaxonomyData> {
 
     return data;
   } catch (error) {
-    // If file doesn't exist, return default data
+    // If file doesn't exist in /tmp (Vercel), try to copy from source
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      if (isVercel) {
+        try {
+          // Try to copy initial data from build directory to /tmp
+          const sourceContent = await fs.readFile(SOURCE_FILE_PATH, 'utf-8');
+          await fs.mkdir(DATA_DIR, { recursive: true });
+          await fs.writeFile(DATA_FILE_PATH, sourceContent, 'utf-8');
+          return JSON.parse(sourceContent) as TaxonomyData;
+        } catch {
+          // If source doesn't exist either, create default
+          await writeTaxonomyData(DEFAULT_DATA);
+          return DEFAULT_DATA;
+        }
+      }
       await writeTaxonomyData(DEFAULT_DATA);
       return DEFAULT_DATA;
     }
