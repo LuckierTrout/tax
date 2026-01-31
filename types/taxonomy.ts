@@ -30,11 +30,19 @@ export interface LevelColorConfig {
   dot: string;     // Dot/text color hex (e.g., "#A855F7")
 }
 
+// Color configuration for pills (audiences/geographies)
+export interface PillColorConfig {
+  bg: string;      // Background color hex (e.g., "#DBEAFE")
+  text: string;    // Text color hex (e.g., "#1E40AF")
+}
+
 // Settings for managing available options
 export interface TaxonomySettings {
   availableAudiences: string[];
   availableGeographies: string[];
   levelColors?: Record<TaxonomyLevel, LevelColorConfig>;
+  audienceColors?: Record<string, PillColorConfig>;
+  geographyColors?: Record<string, PillColorConfig>;
 }
 
 export interface TaxonomyData {

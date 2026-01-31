@@ -2,8 +2,8 @@
 
 import { memo } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
-import { TaxonomyLevel, LEVELS_WITH_OBJECTIVE, LevelColorConfig } from '@/types/taxonomy';
-import { LEVEL_LABELS } from '@/config/levels';
+import { TaxonomyLevel, LEVELS_WITH_OBJECTIVE, LevelColorConfig, PillColorConfig } from '@/types/taxonomy';
+import { LEVEL_LABELS, getDefaultAudienceColor, getDefaultGeographyColor } from '@/config/levels';
 import { Plus } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -20,6 +20,8 @@ interface TaxonomyNodeData {
   onAddChild?: (nodeId: string) => void;
   nodeId?: string;
   customColors?: LevelColorConfig;
+  audienceColors?: Record<string, PillColorConfig>;
+  geographyColors?: Record<string, PillColorConfig>;
 }
 
 function TaxonomyNodeComponent({ data, selected, id }: NodeProps) {
@@ -54,6 +56,22 @@ function TaxonomyNodeComponent({ data, selected, id }: NodeProps) {
     backgroundColor: customColors.bg,
     borderColor: customColors.border,
   } : {};
+
+  // Get audience pill color
+  const getAudiencePillColor = (audience: string, index: number): PillColorConfig => {
+    if (nodeData.audienceColors?.[audience]) {
+      return nodeData.audienceColors[audience];
+    }
+    return getDefaultAudienceColor(index);
+  };
+
+  // Get geography pill color
+  const getGeographyPillColor = (geography: string, index: number): PillColorConfig => {
+    if (nodeData.geographyColors?.[geography]) {
+      return nodeData.geographyColors[geography];
+    }
+    return getDefaultGeographyColor(index);
+  };
 
   return (
     <div
@@ -106,14 +124,18 @@ function TaxonomyNodeComponent({ data, selected, id }: NodeProps) {
           {/* Audiences */}
           {hasAudiences && (
             <div className="flex flex-wrap gap-1">
-              {nodeData.audiences!.map((audience) => (
-                <span
-                  key={audience}
-                  className="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[8px] font-medium"
-                >
-                  {audience}
-                </span>
-              ))}
+              {nodeData.audiences!.map((audience, index) => {
+                const colors = getAudiencePillColor(audience, index);
+                return (
+                  <span
+                    key={audience}
+                    className="inline-block px-1.5 py-0.5 rounded text-[8px] font-medium"
+                    style={{ backgroundColor: colors.bg, color: colors.text }}
+                  >
+                    {audience}
+                  </span>
+                );
+              })}
             </div>
           )}
           {/* Separator line between audiences and geographies */}
@@ -123,14 +145,18 @@ function TaxonomyNodeComponent({ data, selected, id }: NodeProps) {
           {/* Geographies */}
           {hasGeographies && (
             <div className="flex flex-wrap gap-1">
-              {nodeData.geographies!.map((geography) => (
-                <span
-                  key={geography}
-                  className="inline-block px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[8px] font-medium"
-                >
-                  {geography}
-                </span>
-              ))}
+              {nodeData.geographies!.map((geography, index) => {
+                const colors = getGeographyPillColor(geography, index);
+                return (
+                  <span
+                    key={geography}
+                    className="inline-block px-1.5 py-0.5 rounded text-[8px] font-medium"
+                    style={{ backgroundColor: colors.bg, color: colors.text }}
+                  >
+                    {geography}
+                  </span>
+                );
+              })}
             </div>
           )}
         </div>

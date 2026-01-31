@@ -73,6 +73,18 @@ export async function initializeDatabase(): Promise<void> {
     ADD COLUMN IF NOT EXISTS level_colors JSONB
   `;
 
+  // Add audience_colors column if it doesn't exist
+  await sql`
+    ALTER TABLE taxonomy_settings
+    ADD COLUMN IF NOT EXISTS audience_colors JSONB
+  `;
+
+  // Add geography_colors column if it doesn't exist
+  await sql`
+    ALTER TABLE taxonomy_settings
+    ADD COLUMN IF NOT EXISTS geography_colors JSONB
+  `;
+
   // Insert default settings if not exists
   await sql`
     INSERT INTO taxonomy_settings (id, available_audiences, available_geographies)
@@ -268,7 +280,7 @@ export async function getSettingsFromDb(): Promise<TaxonomySettings> {
   const sql = getDb();
 
   const rows = await sql`
-    SELECT available_audiences, available_geographies, level_colors
+    SELECT available_audiences, available_geographies, level_colors, audience_colors, geography_colors
     FROM taxonomy_settings
     WHERE id = 1
   `;
@@ -281,6 +293,8 @@ export async function getSettingsFromDb(): Promise<TaxonomySettings> {
     availableAudiences: rows[0].available_audiences || DEFAULT_SETTINGS.availableAudiences,
     availableGeographies: rows[0].available_geographies || DEFAULT_SETTINGS.availableGeographies,
     levelColors: rows[0].level_colors || undefined,
+    audienceColors: rows[0].audience_colors || undefined,
+    geographyColors: rows[0].geography_colors || undefined,
   };
 }
 
@@ -290,15 +304,19 @@ export async function updateSettingsInDb(
   const sql = getDb();
 
   const levelColorsJson = settings.levelColors ? JSON.stringify(settings.levelColors) : null;
+  const audienceColorsJson = settings.audienceColors ? JSON.stringify(settings.audienceColors) : null;
+  const geographyColorsJson = settings.geographyColors ? JSON.stringify(settings.geographyColors) : null;
 
   const rows = await sql`
     UPDATE taxonomy_settings SET
       available_audiences = COALESCE(${settings.availableAudiences ?? null}, available_audiences),
       available_geographies = COALESCE(${settings.availableGeographies ?? null}, available_geographies),
       level_colors = COALESCE(${levelColorsJson}::jsonb, level_colors),
+      audience_colors = COALESCE(${audienceColorsJson}::jsonb, audience_colors),
+      geography_colors = COALESCE(${geographyColorsJson}::jsonb, geography_colors),
       updated_at = NOW()
     WHERE id = 1
-    RETURNING available_audiences, available_geographies, level_colors
+    RETURNING available_audiences, available_geographies, level_colors, audience_colors, geography_colors
   `;
 
   if (rows.length === 0) {
@@ -309,5 +327,7 @@ export async function updateSettingsInDb(
     availableAudiences: rows[0].available_audiences,
     availableGeographies: rows[0].available_geographies,
     levelColors: rows[0].level_colors || undefined,
+    audienceColors: rows[0].audience_colors || undefined,
+    geographyColors: rows[0].geography_colors || undefined,
   };
 }

@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Settings, Save, RotateCcw } from 'lucide-react';
-import { TaxonomySettings, TaxonomyLevel, LevelColorConfig } from '@/types/taxonomy';
-import { LEVEL_ORDER, LEVEL_LABELS, DEFAULT_LEVEL_COLORS_HEX } from '@/config/levels';
+import { TaxonomySettings, TaxonomyLevel, LevelColorConfig, PillColorConfig } from '@/types/taxonomy';
+import { LEVEL_ORDER, LEVEL_LABELS, DEFAULT_LEVEL_COLORS_HEX, getDefaultAudienceColor, getDefaultGeographyColor } from '@/config/levels';
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -147,6 +147,92 @@ export function SettingsPanel({ isOpen, onClose, onSettingsChange }: SettingsPan
     const updated = {
       ...settings,
       levelColors: { ...DEFAULT_LEVEL_COLORS_HEX },
+    };
+    setSettings(updated);
+    saveSettings(updated);
+  };
+
+  // Audience color helpers
+  const getAudienceColor = (audience: string, property: keyof PillColorConfig): string => {
+    if (settings?.audienceColors?.[audience]?.[property]) {
+      return settings.audienceColors[audience][property];
+    }
+    const index = settings?.availableAudiences.indexOf(audience) ?? 0;
+    return getDefaultAudienceColor(index)[property];
+  };
+
+  const updateAudienceColor = (audience: string, property: keyof PillColorConfig, value: string) => {
+    if (!settings) return;
+
+    const index = settings.availableAudiences.indexOf(audience);
+    const defaultColor = getDefaultAudienceColor(index);
+    const currentColors = settings.audienceColors || {};
+    const updated = {
+      ...settings,
+      audienceColors: {
+        ...currentColors,
+        [audience]: {
+          bg: currentColors[audience]?.bg || defaultColor.bg,
+          text: currentColors[audience]?.text || defaultColor.text,
+          [property]: value,
+        },
+      },
+    };
+    setSettings(updated);
+
+    if (isValidHex(value)) {
+      saveSettings(updated);
+    }
+  };
+
+  const resetAudienceColors = () => {
+    if (!settings) return;
+    const updated = {
+      ...settings,
+      audienceColors: undefined,
+    };
+    setSettings(updated);
+    saveSettings(updated);
+  };
+
+  // Geography color helpers
+  const getGeographyColor = (geography: string, property: keyof PillColorConfig): string => {
+    if (settings?.geographyColors?.[geography]?.[property]) {
+      return settings.geographyColors[geography][property];
+    }
+    const index = settings?.availableGeographies.indexOf(geography) ?? 0;
+    return getDefaultGeographyColor(index)[property];
+  };
+
+  const updateGeographyColor = (geography: string, property: keyof PillColorConfig, value: string) => {
+    if (!settings) return;
+
+    const index = settings.availableGeographies.indexOf(geography);
+    const defaultColor = getDefaultGeographyColor(index);
+    const currentColors = settings.geographyColors || {};
+    const updated = {
+      ...settings,
+      geographyColors: {
+        ...currentColors,
+        [geography]: {
+          bg: currentColors[geography]?.bg || defaultColor.bg,
+          text: currentColors[geography]?.text || defaultColor.text,
+          [property]: value,
+        },
+      },
+    };
+    setSettings(updated);
+
+    if (isValidHex(value)) {
+      saveSettings(updated);
+    }
+  };
+
+  const resetGeographyColors = () => {
+    if (!settings) return;
+    const updated = {
+      ...settings,
+      geographyColors: undefined,
     };
     setSettings(updated);
     saveSettings(updated);
@@ -364,6 +450,174 @@ export function SettingsPanel({ isOpen, onClose, onSettingsChange }: SettingsPan
                   ))}
                 </div>
               </div>
+
+              {/* Audience Colors Section */}
+              {settings.availableAudiences.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700">Audience Pill Colors</h3>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Customize colors for each audience pill.
+                      </p>
+                    </div>
+                    <button
+                      onClick={resetAudienceColors}
+                      disabled={isSaving}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded"
+                      title="Reset to default colors"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Reset
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {settings.availableAudiences.map((audience) => (
+                      <div key={audience} className="border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span
+                            className="px-2 py-1 rounded text-xs font-medium"
+                            style={{
+                              backgroundColor: getAudienceColor(audience, 'bg'),
+                              color: getAudienceColor(audience, 'text'),
+                            }}
+                          >
+                            {audience}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">Background</label>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-6 h-6 rounded border border-gray-300 flex-shrink-0"
+                                style={{ backgroundColor: getAudienceColor(audience, 'bg') }}
+                              />
+                              <input
+                                type="text"
+                                value={getAudienceColor(audience, 'bg')}
+                                onChange={(e) => updateAudienceColor(audience, 'bg', e.target.value)}
+                                placeholder="#DBEAFE"
+                                className={`w-full px-2 py-1 border rounded text-xs font-mono ${
+                                  isValidHex(getAudienceColor(audience, 'bg'))
+                                    ? 'border-gray-300'
+                                    : 'border-red-400 bg-red-50'
+                                }`}
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">Text</label>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-6 h-6 rounded border border-gray-300 flex-shrink-0 flex items-center justify-center text-xs font-bold"
+                                style={{ color: getAudienceColor(audience, 'text') }}
+                              >
+                                Aa
+                              </div>
+                              <input
+                                type="text"
+                                value={getAudienceColor(audience, 'text')}
+                                onChange={(e) => updateAudienceColor(audience, 'text', e.target.value)}
+                                placeholder="#1E40AF"
+                                className={`w-full px-2 py-1 border rounded text-xs font-mono ${
+                                  isValidHex(getAudienceColor(audience, 'text'))
+                                    ? 'border-gray-300'
+                                    : 'border-red-400 bg-red-50'
+                                }`}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Geography Colors Section */}
+              {settings.availableGeographies.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700">Geography Pill Colors</h3>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Customize colors for each geography pill.
+                      </p>
+                    </div>
+                    <button
+                      onClick={resetGeographyColors}
+                      disabled={isSaving}
+                      className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded"
+                      title="Reset to default colors"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Reset
+                    </button>
+                  </div>
+                  <div className="space-y-3">
+                    {settings.availableGeographies.map((geography) => (
+                      <div key={geography} className="border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span
+                            className="px-2 py-1 rounded text-xs font-medium"
+                            style={{
+                              backgroundColor: getGeographyColor(geography, 'bg'),
+                              color: getGeographyColor(geography, 'text'),
+                            }}
+                          >
+                            {geography}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">Background</label>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-6 h-6 rounded border border-gray-300 flex-shrink-0"
+                                style={{ backgroundColor: getGeographyColor(geography, 'bg') }}
+                              />
+                              <input
+                                type="text"
+                                value={getGeographyColor(geography, 'bg')}
+                                onChange={(e) => updateGeographyColor(geography, 'bg', e.target.value)}
+                                placeholder="#D1FAE5"
+                                className={`w-full px-2 py-1 border rounded text-xs font-mono ${
+                                  isValidHex(getGeographyColor(geography, 'bg'))
+                                    ? 'border-gray-300'
+                                    : 'border-red-400 bg-red-50'
+                                }`}
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-500 mb-1">Text</label>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-6 h-6 rounded border border-gray-300 flex-shrink-0 flex items-center justify-center text-xs font-bold"
+                                style={{ color: getGeographyColor(geography, 'text') }}
+                              >
+                                Aa
+                              </div>
+                              <input
+                                type="text"
+                                value={getGeographyColor(geography, 'text')}
+                                onChange={(e) => updateGeographyColor(geography, 'text', e.target.value)}
+                                placeholder="#065F46"
+                                className={`w-full px-2 py-1 border rounded text-xs font-mono ${
+                                  isValidHex(getGeographyColor(geography, 'text'))
+                                    ? 'border-gray-300'
+                                    : 'border-red-400 bg-red-50'
+                                }`}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-red-500">Failed to load settings</div>

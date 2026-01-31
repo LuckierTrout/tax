@@ -19,7 +19,7 @@ import '@xyflow/react/dist/style.css';
 
 import { TaxonomyNode as TaxonomyNodeComponent } from './TaxonomyNode';
 import { useTreeLayout } from './useTreeLayout';
-import { TaxonomyNode, TaxonomyLevel, LevelColorConfig } from '@/types/taxonomy';
+import { TaxonomyNode, TaxonomyLevel, LevelColorConfig, PillColorConfig } from '@/types/taxonomy';
 import { toReactFlowElements } from '@/lib/tree-utils';
 import { LEVEL_COLORS, DEFAULT_LEVEL_COLORS_HEX } from '@/config/levels';
 import { LayoutGrid, Maximize2, FileDown, Loader2 } from 'lucide-react';
@@ -34,6 +34,8 @@ interface TreeViewProps {
   onContextMenu?: (e: React.MouseEvent, nodeId: string) => void;
   onAddChild?: (nodeId: string) => void;
   levelColors?: Record<TaxonomyLevel, LevelColorConfig>;
+  audienceColors?: Record<string, PillColorConfig>;
+  geographyColors?: Record<string, PillColorConfig>;
 }
 
 const nodeTypes: NodeTypes = {
@@ -49,6 +51,8 @@ function TreeViewInner({
   onContextMenu,
   onAddChild,
   levelColors,
+  audienceColors,
+  geographyColors,
 }: TreeViewProps) {
   const { getLayoutedElements } = useTreeLayout();
   const { fitView, setNodes, setEdges } = useReactFlow();
@@ -100,11 +104,13 @@ function TreeViewInner({
             onAddChild,
             nodeId: node.id,
             customColors,
+            audienceColors,
+            geographyColors,
           },
         };
       })
     );
-  }, [selectedNodeId, searchTerm, taxonomyNodes, setNodesState, onContextMenu, onAddChild, levelColors]);
+  }, [selectedNodeId, searchTerm, taxonomyNodes, setNodesState, onContextMenu, onAddChild, levelColors, audienceColors, geographyColors]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
@@ -147,6 +153,8 @@ function TreeViewInner({
           onAddChild,
           nodeId: node.id,
           customColors,
+          audienceColors,
+          geographyColors,
         },
       };
     });
@@ -158,7 +166,7 @@ function TreeViewInner({
     setTimeout(() => {
       fitView({ padding: 0.2, duration: 300 });
     }, 50);
-  }, [taxonomyNodes, getLayoutedElements, selectedNodeId, searchTerm, setNodesState, setEdgesState, fitView, onContextMenu, onAddChild, levelColors]);
+  }, [taxonomyNodes, getLayoutedElements, selectedNodeId, searchTerm, setNodesState, setEdgesState, fitView, onContextMenu, onAddChild, levelColors, audienceColors, geographyColors]);
 
   // Fit to screen only (no re-layout)
   const handleFitToScreen = useCallback(() => {

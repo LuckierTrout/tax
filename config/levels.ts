@@ -1,4 +1,4 @@
-import { TaxonomyLevel, LevelColorConfig } from '@/types/taxonomy';
+import { TaxonomyLevel, LevelColorConfig, PillColorConfig } from '@/types/taxonomy';
 
 export const LEVEL_HIERARCHY: Record<TaxonomyLevel, TaxonomyLevel | null> = {
   pillar: null,
@@ -105,4 +105,36 @@ export function getParentLevel(level: TaxonomyLevel): TaxonomyLevel | null {
 
 export function getLevelDepth(level: TaxonomyLevel): number {
   return LEVEL_ORDER.indexOf(level);
+}
+
+// Default color palettes for audience and geography pills
+export const DEFAULT_AUDIENCE_COLORS: PillColorConfig[] = [
+  { bg: '#DBEAFE', text: '#1E40AF' }, // blue
+  { bg: '#E0E7FF', text: '#3730A3' }, // indigo
+  { bg: '#EDE9FE', text: '#5B21B6' }, // violet
+  { bg: '#FCE7F3', text: '#9D174D' }, // pink
+  { bg: '#FEE2E2', text: '#991B1B' }, // red
+  { bg: '#FFEDD5', text: '#9A3412' }, // orange
+  { bg: '#FEF3C7', text: '#92400E' }, // amber
+  { bg: '#ECFCCB', text: '#3F6212' }, // lime
+];
+
+export const DEFAULT_GEOGRAPHY_COLORS: PillColorConfig[] = [
+  { bg: '#D1FAE5', text: '#065F46' }, // emerald
+  { bg: '#CCFBF1', text: '#0F766E' }, // teal
+  { bg: '#CFFAFE', text: '#0E7490' }, // cyan
+  { bg: '#E0F2FE', text: '#0369A1' }, // sky
+  { bg: '#DBEAFE', text: '#1D4ED8' }, // blue
+  { bg: '#F3E8FF', text: '#7C3AED' }, // purple
+  { bg: '#FAE8FF', text: '#A21CAF' }, // fuchsia
+  { bg: '#FDF4FF', text: '#86198F' }, // pink
+];
+
+// Get default color for a pill based on its index
+export function getDefaultAudienceColor(index: number): PillColorConfig {
+  return DEFAULT_AUDIENCE_COLORS[index % DEFAULT_AUDIENCE_COLORS.length];
+}
+
+export function getDefaultGeographyColor(index: number): PillColorConfig {
+  return DEFAULT_GEOGRAPHY_COLORS[index % DEFAULT_GEOGRAPHY_COLORS.length];
 }

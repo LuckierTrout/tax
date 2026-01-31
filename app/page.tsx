@@ -488,6 +488,8 @@ export default function TaxonomyPage() {
               onContextMenu={handleContextMenu}
               onAddChild={handleAddChildFromTree}
               levelColors={settings?.levelColors}
+              audienceColors={settings?.audienceColors}
+              geographyColors={settings?.geographyColors}
             />
           ) : (
             <ColumnView

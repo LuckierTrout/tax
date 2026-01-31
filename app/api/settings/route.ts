@@ -16,10 +16,17 @@ const LevelColorsSchema = z.object({
   subtopic: LevelColorConfigSchema,
 });
 
+const PillColorConfigSchema = z.object({
+  bg: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  text: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+});
+
 const UpdateSettingsSchema = z.object({
   availableAudiences: z.array(z.string().min(1).max(100)).optional(),
   availableGeographies: z.array(z.string().min(1).max(100)).optional(),
   levelColors: LevelColorsSchema.optional(),
+  audienceColors: z.record(z.string(), PillColorConfigSchema).optional(),
+  geographyColors: z.record(z.string(), PillColorConfigSchema).optional(),
 });
 
 // GET /api/settings - Get current settings
