@@ -12,12 +12,12 @@ interface ExportOptions {
 export type ImageExportFormat = 'pdf' | 'svg' | 'jpg' | 'png';
 
 // Level colors mapping for SVG export
-const levelColors: Record<string, { bg: string; border: string; text: string }> = {
-  pillar: { bg: '#faf5ff', border: '#c084fc', text: '#581c87' },
-  narrative_theme: { bg: '#eff6ff', border: '#60a5fa', text: '#1e3a8a' },
-  subject: { bg: '#f0fdf4', border: '#4ade80', text: '#14532d' },
-  topic: { bg: '#fefce8', border: '#facc15', text: '#713f12' },
-  subtopic: { bg: '#fff7ed', border: '#fb923c', text: '#7c2d12' },
+const levelColors: Record<string, { bg: string; border: string; text: string; dot: string }> = {
+  pillar: { bg: '#faf5ff', border: '#c084fc', text: '#581c87', dot: '#a855f7' },
+  narrative_theme: { bg: '#eff6ff', border: '#60a5fa', text: '#1e3a8a', dot: '#3b82f6' },
+  subject: { bg: '#f0fdf4', border: '#4ade80', text: '#14532d', dot: '#22c55e' },
+  topic: { bg: '#fefce8', border: '#facc15', text: '#713f12', dot: '#eab308' },
+  subtopic: { bg: '#fff7ed', border: '#fb923c', text: '#7c2d12', dot: '#f97316' },
 };
 
 // Generate a smoothstep path between two points (like ReactFlow)
@@ -216,25 +216,215 @@ function generateSVG(
       rect.setAttribute('stroke-width', '2');
       svg.appendChild(rect);
 
-      // Get label text
+      let currentY = nodeY + 16;
+
+      // Get and render level label (small uppercase text at top)
+      const levelLabelEl = nodeEl.querySelector('.text-\\[10px\\].uppercase');
+      if (levelLabelEl?.textContent) {
+        const levelText = document.createElementNS(svgNS, 'text');
+        levelText.setAttribute('x', String(nodeX + nodeWidth / 2));
+        levelText.setAttribute('y', String(currentY));
+        levelText.setAttribute('text-anchor', 'middle');
+        levelText.setAttribute('fill', '#9ca3af');
+        levelText.setAttribute('font-family', 'system-ui, sans-serif');
+        levelText.setAttribute('font-size', '10');
+        levelText.setAttribute('letter-spacing', '0.05em');
+        levelText.textContent = levelLabelEl.textContent;
+        svg.appendChild(levelText);
+        currentY += 16;
+      }
+
+      // Get and render colored dot + node name
+      const dotEl = nodeEl.querySelector('.w-2.h-2.rounded-full') as HTMLElement;
       const labelEl = nodeEl.querySelector('.font-semibold');
       const label = labelEl?.textContent || '';
 
-      // Add text
-      const text = document.createElementNS(svgNS, 'text');
-      text.setAttribute('x', String(nodeX + nodeWidth / 2));
-      text.setAttribute('y', String(nodeY + nodeHeight / 2 + 5));
-      text.setAttribute('text-anchor', 'middle');
-      text.setAttribute('fill', colors.text);
-      text.setAttribute('font-family', 'system-ui, sans-serif');
-      text.setAttribute('font-size', '14');
-      text.setAttribute('font-weight', '600');
-      text.textContent = label.length > 25 ? label.substring(0, 22) + '...' : label;
-      svg.appendChild(text);
+      if (dotEl) {
+        const dotColor = dotEl.style.backgroundColor || colors.dot;
+        const dot = document.createElementNS(svgNS, 'circle');
+        dot.setAttribute('cx', String(nodeX + nodeWidth / 2 - (label.length * 3) - 8));
+        dot.setAttribute('cy', String(currentY - 3));
+        dot.setAttribute('r', '4');
+        dot.setAttribute('fill', dotColor);
+        svg.appendChild(dot);
+      }
+
+      const nameText = document.createElementNS(svgNS, 'text');
+      nameText.setAttribute('x', String(nodeX + nodeWidth / 2));
+      nameText.setAttribute('y', String(currentY));
+      nameText.setAttribute('text-anchor', 'middle');
+      nameText.setAttribute('fill', colors.text);
+      nameText.setAttribute('font-family', 'system-ui, sans-serif');
+      nameText.setAttribute('font-size', '14');
+      nameText.setAttribute('font-weight', '600');
+      const displayLabel = label.length > 20 ? label.substring(0, 17) + '...' : label;
+      nameText.textContent = displayLabel;
+      svg.appendChild(nameText);
+      currentY += 8;
+
+      // Get and render objective text
+      const objectiveEl = nodeEl.querySelector('.line-clamp-3');
+      if (objectiveEl?.textContent) {
+        currentY += 12; // Add border-t spacing
+
+        // Draw separator line
+        const sepLine = document.createElementNS(svgNS, 'line');
+        sepLine.setAttribute('x1', String(nodeX + 8));
+        sepLine.setAttribute('y1', String(currentY - 6));
+        sepLine.setAttribute('x2', String(nodeX + nodeWidth - 8));
+        sepLine.setAttribute('y2', String(currentY - 6));
+        sepLine.setAttribute('stroke', '#e5e7eb');
+        sepLine.setAttribute('stroke-width', '1');
+        svg.appendChild(sepLine);
+
+        const objectiveText = objectiveEl.textContent;
+        const maxCharsPerLine = Math.floor((nodeWidth - 16) / 5);
+        const lines = wrapText(objectiveText, maxCharsPerLine, 3);
+
+        lines.forEach((line) => {
+          const objText = document.createElementNS(svgNS, 'text');
+          objText.setAttribute('x', String(nodeX + 8));
+          objText.setAttribute('y', String(currentY));
+          objText.setAttribute('fill', '#6b7280');
+          objText.setAttribute('font-family', 'system-ui, sans-serif');
+          objText.setAttribute('font-size', '10');
+          objText.textContent = line;
+          svg.appendChild(objText);
+          currentY += 12;
+        });
+      }
+
+      // Get and render audience pills
+      const audiencePills = nodeEl.querySelectorAll('.flex.flex-wrap.gap-1:first-of-type span');
+      if (audiencePills.length > 0) {
+        currentY += 8;
+
+        // Draw separator line
+        const sepLine = document.createElementNS(svgNS, 'line');
+        sepLine.setAttribute('x1', String(nodeX + 8));
+        sepLine.setAttribute('y1', String(currentY - 4));
+        sepLine.setAttribute('x2', String(nodeX + nodeWidth - 8));
+        sepLine.setAttribute('y2', String(currentY - 4));
+        sepLine.setAttribute('stroke', '#e5e7eb');
+        sepLine.setAttribute('stroke-width', '1');
+        svg.appendChild(sepLine);
+
+        let pillX = nodeX + 8;
+        audiencePills.forEach((pill) => {
+          const pillEl = pill as HTMLElement;
+          const pillText = pillEl.textContent || '';
+          const pillWidth = pillText.length * 5 + 12;
+          const pillBg = pillEl.style.backgroundColor || '#dbeafe';
+          const pillColor = pillEl.style.color || '#1e40af';
+
+          if (pillX + pillWidth > nodeX + nodeWidth - 8) {
+            pillX = nodeX + 8;
+            currentY += 14;
+          }
+
+          const pillRect = document.createElementNS(svgNS, 'rect');
+          pillRect.setAttribute('x', String(pillX));
+          pillRect.setAttribute('y', String(currentY - 8));
+          pillRect.setAttribute('width', String(pillWidth));
+          pillRect.setAttribute('height', '12');
+          pillRect.setAttribute('rx', '3');
+          pillRect.setAttribute('fill', pillBg);
+          svg.appendChild(pillRect);
+
+          const pillTextEl = document.createElementNS(svgNS, 'text');
+          pillTextEl.setAttribute('x', String(pillX + pillWidth / 2));
+          pillTextEl.setAttribute('y', String(currentY));
+          pillTextEl.setAttribute('text-anchor', 'middle');
+          pillTextEl.setAttribute('fill', pillColor);
+          pillTextEl.setAttribute('font-family', 'system-ui, sans-serif');
+          pillTextEl.setAttribute('font-size', '8');
+          pillTextEl.setAttribute('font-weight', '500');
+          pillTextEl.textContent = pillText;
+          svg.appendChild(pillTextEl);
+
+          pillX += pillWidth + 4;
+        });
+        currentY += 6;
+      }
+
+      // Get and render geography pills
+      const allPillContainers = nodeEl.querySelectorAll('.flex.flex-wrap.gap-1');
+      const geographyContainer = allPillContainers.length > 1 ? allPillContainers[allPillContainers.length - 1] : null;
+      const geographyPills = geographyContainer?.querySelectorAll('span') || [];
+
+      if (geographyPills.length > 0 && geographyContainer !== allPillContainers[0]) {
+        currentY += 8;
+
+        let pillX = nodeX + 8;
+        geographyPills.forEach((pill) => {
+          const pillEl = pill as HTMLElement;
+          const pillText = pillEl.textContent || '';
+          const pillWidth = pillText.length * 5 + 12;
+          const pillBg = pillEl.style.backgroundColor || '#dcfce7';
+          const pillColor = pillEl.style.color || '#166534';
+
+          if (pillX + pillWidth > nodeX + nodeWidth - 8) {
+            pillX = nodeX + 8;
+            currentY += 14;
+          }
+
+          const pillRect = document.createElementNS(svgNS, 'rect');
+          pillRect.setAttribute('x', String(pillX));
+          pillRect.setAttribute('y', String(currentY - 8));
+          pillRect.setAttribute('width', String(pillWidth));
+          pillRect.setAttribute('height', '12');
+          pillRect.setAttribute('rx', '3');
+          pillRect.setAttribute('fill', pillBg);
+          svg.appendChild(pillRect);
+
+          const pillTextEl = document.createElementNS(svgNS, 'text');
+          pillTextEl.setAttribute('x', String(pillX + pillWidth / 2));
+          pillTextEl.setAttribute('y', String(currentY));
+          pillTextEl.setAttribute('text-anchor', 'middle');
+          pillTextEl.setAttribute('fill', pillColor);
+          pillTextEl.setAttribute('font-family', 'system-ui, sans-serif');
+          pillTextEl.setAttribute('font-size', '8');
+          pillTextEl.setAttribute('font-weight', '500');
+          pillTextEl.textContent = pillText;
+          svg.appendChild(pillTextEl);
+
+          pillX += pillWidth + 4;
+        });
+      }
     }
   });
 
   return { svg, width: contentWidth, height: contentHeight };
+}
+
+// Helper function to wrap text into lines
+function wrapText(text: string, maxCharsPerLine: number, maxLines: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
+
+  for (const word of words) {
+    if (lines.length >= maxLines) break;
+
+    if (currentLine.length + word.length + 1 <= maxCharsPerLine) {
+      currentLine += (currentLine ? ' ' : '') + word;
+    } else {
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+      currentLine = word;
+    }
+  }
+
+  if (currentLine && lines.length < maxLines) {
+    if (lines.length === maxLines - 1 && words.length > lines.join(' ').split(' ').length + currentLine.split(' ').length) {
+      lines.push(currentLine.substring(0, maxCharsPerLine - 3) + '...');
+    } else {
+      lines.push(currentLine);
+    }
+  }
+
+  return lines;
 }
 
 // Convert SVG to canvas
