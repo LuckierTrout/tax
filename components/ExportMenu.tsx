@@ -1,14 +1,16 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Download, ChevronDown, FileJson, FileSpreadsheet } from 'lucide-react';
+import { Download, ChevronDown, FileJson, FileSpreadsheet, FileImage } from 'lucide-react';
 import clsx from 'clsx';
 
 interface ExportMenuProps {
   onExport: (format: 'json' | 'csv') => void;
+  onExportPDF?: () => void;
+  showPdfOption?: boolean;
 }
 
-export function ExportMenu({ onExport }: ExportMenuProps) {
+export function ExportMenu({ onExport, onExportPDF, showPdfOption = true }: ExportMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -31,6 +33,13 @@ export function ExportMenu({ onExport }: ExportMenuProps) {
     setIsOpen(false);
   };
 
+  const handleExportPDF = () => {
+    if (onExportPDF) {
+      onExportPDF();
+    }
+    setIsOpen(false);
+  };
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
@@ -49,6 +58,15 @@ export function ExportMenu({ onExport }: ExportMenuProps) {
 
       {isOpen && (
         <div className="absolute top-full right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+          {showPdfOption && onExportPDF && (
+            <button
+              onClick={handleExportPDF}
+              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+            >
+              <FileImage className="w-4 h-4 text-red-500" />
+              Export as PDF
+            </button>
+          )}
           <button
             onClick={() => handleExport('json')}
             className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"

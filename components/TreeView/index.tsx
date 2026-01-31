@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import {
   ReactFlow,
   Background,
@@ -22,7 +22,7 @@ import { useTreeLayout } from './useTreeLayout';
 import { TaxonomyNode, TaxonomyLevel, LevelColorConfig, PillColorConfig } from '@/types/taxonomy';
 import { toReactFlowElements } from '@/lib/tree-utils';
 import { DEFAULT_LEVEL_COLORS_HEX } from '@/config/levels';
-import { LayoutGrid, Maximize2, FileDown, Loader2 } from 'lucide-react';
+import { LayoutGrid, Maximize2 } from 'lucide-react';
 import { exportReactFlowToPDF } from '@/lib/pdf-export';
 
 interface TreeViewProps {
@@ -38,9 +38,17 @@ interface TreeViewProps {
   geographyColors?: Record<string, PillColorConfig>;
 }
 
+export interface TreeViewHandle {
+  exportPDF: () => Promise<void>;
+}
+
 const nodeTypes: NodeTypes = {
   taxonomyNode: TaxonomyNodeComponent,
 };
+
+interface TreeViewInnerProps extends TreeViewProps {
+  onExportReady?: (exportFn: () => Promise<void>) => void;
+}
 
 function TreeViewInner({
   taxonomyNodes,
@@ -53,11 +61,11 @@ function TreeViewInner({
   levelColors,
   audienceColors,
   geographyColors,
-}: TreeViewProps) {
+  onExportReady,
+}: TreeViewInnerProps) {
   const { getLayoutedElements } = useTreeLayout();
   const { fitView } = useReactFlow();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isExporting, setIsExporting] = useState(false);
 
   // Track the taxonomy data version to know when to re-layout
   const taxonomyVersion = useMemo(() => {
@@ -175,9 +183,8 @@ function TreeViewInner({
 
   // Export to PDF
   const handleExportPDF = useCallback(async () => {
-    if (!containerRef.current || isExporting) return;
+    if (!containerRef.current) return;
 
-    setIsExporting(true);
     try {
       // First auto-organize
       const { nodes: freshNodes, edges: freshEdges } = toReactFlowElements(taxonomyNodes);
@@ -214,10 +221,15 @@ function TreeViewInner({
     } catch (error) {
       console.error('Export failed:', error);
       alert('Failed to export PDF. Please try again.');
-    } finally {
-      setIsExporting(false);
     }
-  }, [isExporting, taxonomyNodes, getLayoutedElements, setNodesState, setEdgesState, fitView, selectedPillar]);
+  }, [taxonomyNodes, getLayoutedElements, setNodesState, setEdgesState, fitView, selectedPillar]);
+
+  // Expose export function to parent
+  useEffect(() => {
+    if (onExportReady) {
+      onExportReady(handleExportPDF);
+    }
+  }, [handleExportPDF, onExportReady]);
 
   // Custom minimap node color based on level
   const nodeColor = useCallback((node: Node) => {
@@ -278,19 +290,6 @@ function TreeViewInner({
               <Maximize2 className="w-4 h-4" />
               Fit to Screen
             </button>
-            <button
-              onClick={handleExportPDF}
-              disabled={isExporting}
-              className="flex items-center gap-2 px-3 py-2 bg-blue-500 rounded-lg shadow-sm border border-blue-600 text-sm font-medium text-white hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title={selectedPillar ? 'Export current pillar to PDF' : 'Export full taxonomy to PDF'}
-            >
-              {isExporting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <FileDown className="w-4 h-4" />
-              )}
-              {isExporting ? 'Exporting...' : 'Export PDF'}
-            </button>
           </div>
           <div className="bg-white/80 rounded-lg px-2 py-1 text-xs text-gray-500 text-right">
             Scroll to zoom • Drag to pan • Click node to select
@@ -302,10 +301,14 @@ function TreeViewInner({
 }
 
 // Wrap with ReactFlowProvider to access useReactFlow hook
-export function TreeView(props: TreeViewProps) {
+interface TreeViewWithRefProps extends TreeViewProps {
+  onExportReady?: (exportFn: () => Promise<void>) => void;
+}
+
+export function TreeView({ onExportReady, ...props }: TreeViewWithRefProps) {
   return (
     <ReactFlowProvider>
-      <TreeViewInner {...props} />
+      <TreeViewInner {...props} onExportReady={onExportReady} />
     </ReactFlowProvider>
   );
 }

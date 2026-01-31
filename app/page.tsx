@@ -61,6 +61,9 @@ export default function TaxonomyPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
+  // PDF export function from TreeView
+  const [exportPDFFn, setExportPDFFn] = useState<(() => Promise<void>) | null>(null);
+
   // Fetch data
   const fetchNodes = useCallback(async () => {
     try {
@@ -441,7 +444,11 @@ export default function TaxonomyPage() {
           </div>
           <div className="flex items-center gap-3">
             <SearchFilter value={searchTerm} onChange={setSearchTerm} />
-            <ExportMenu onExport={handleExport} />
+            <ExportMenu
+              onExport={handleExport}
+              onExportPDF={exportPDFFn || undefined}
+              showPdfOption={viewMode === 'tree'}
+            />
             <button
               onClick={() => setSettingsOpen(true)}
               className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
@@ -490,6 +497,7 @@ export default function TaxonomyPage() {
               levelColors={settings?.levelColors}
               audienceColors={settings?.audienceColors}
               geographyColors={settings?.geographyColors}
+              onExportReady={(fn) => setExportPDFFn(() => fn)}
             />
           ) : (
             <ColumnView
