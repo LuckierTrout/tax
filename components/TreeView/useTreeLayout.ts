@@ -14,42 +14,35 @@ interface LayoutOptions {
 // Base dimensions
 const NODE_WIDTH = 220;
 const MIN_GAP_BETWEEN_TIERS = 150; // Minimum vertical gap between tiers
-const HORIZONTAL_NODE_GAP = 60;   // Gap between sibling nodes
+const HORIZONTAL_NODE_GAP = 80;   // Gap between sibling nodes
 
 // Estimate node height based on content
 function estimateNodeHeight(nodeData: Record<string, unknown>): number {
   let height = 0;
+  height += 70; // Base
 
-  // Base: level label + name + padding
-  height += 70;
-
-  // Objective adds height
   const objective = nodeData.objective as string | undefined;
   if (objective) {
     const lines = Math.min(3, Math.ceil(objective.length / 30));
     height += 20 + (lines * 16);
   }
 
-  // Audiences add height
   const audiences = nodeData.audiences as string[] | undefined;
   if (audiences && audiences.length > 0) {
-    const pillsPerRow = 3;
-    const rows = Math.ceil(audiences.length / pillsPerRow);
+    const rows = Math.ceil(audiences.length / 3);
     height += 10 + (rows * 22);
   }
 
-  // Geographies add height
   const geographies = nodeData.geographies as string[] | undefined;
   if (geographies && geographies.length > 0) {
-    const pillsPerRow = 3;
-    const rows = Math.ceil(geographies.length / pillsPerRow);
+    const rows = Math.ceil(geographies.length / 3);
     height += 10 + (rows * 22);
   }
 
   return height;
 }
 
-// Calculate the maximum height of nodes at each level
+// Calculate max height at each level
 function calculateLevelHeights(
   nodes: Node[],
   nodeDepth: Map<string, number>
@@ -59,7 +52,6 @@ function calculateLevelHeights(
   nodes.forEach((node) => {
     const depth = nodeDepth.get(node.id) ?? 0;
     const nodeHeight = estimateNodeHeight(node.data as Record<string, unknown>);
-
     const currentMax = levelHeights.get(depth) || 0;
     if (nodeHeight > currentMax) {
       levelHeights.set(depth, nodeHeight);
@@ -69,7 +61,7 @@ function calculateLevelHeights(
   return levelHeights;
 }
 
-// Calculate cumulative Y positions for each level
+// Calculate Y positions for each level
 function calculateLevelYPositions(
   levelHeights: Map<number, number>,
   maxDepth: number,
@@ -87,7 +79,7 @@ function calculateLevelYPositions(
   return levelY;
 }
 
-// Bottom-up layout: position leaves first, then center parents over children
+// Classic tree layout - subtree width based, parents centered over children
 function calculateTreeLayout(
   nodes: Node[],
   edges: Edge[],
@@ -126,140 +118,76 @@ function calculateTreeLayout(
 
   roots.forEach((root) => setDepth(root.id, 0));
 
-  // Calculate max depth
-  const maxDepth = nodes.length > 0
-    ? Math.max(...Array.from(nodeDepth.values()))
-    : 0;
+  const maxDepth = Math.max(...Array.from(nodeDepth.values()), 0);
 
-  // Calculate Y positions based on content heights
+  // Calculate Y positions
   const levelHeights = calculateLevelHeights(nodes, nodeDepth);
   const levelYPositions = calculateLevelYPositions(levelHeights, maxDepth, MIN_GAP_BETWEEN_TIERS);
 
-  // Group nodes by level, maintaining DFS order
-  const nodesByLevel = new Map<number, string[]>();
+  // Calculate subtree width for each node (bottom-up)
+  const subtreeWidth = new Map<string, number>();
 
-  function collectByLevel(nodeId: string): void {
-    const depth = nodeDepth.get(nodeId) ?? 0;
-    if (!nodesByLevel.has(depth)) {
-      nodesByLevel.set(depth, []);
-    }
-    nodesByLevel.get(depth)!.push(nodeId);
-
+  function calcSubtreeWidth(nodeId: string): number {
     const children = childrenMap.get(nodeId) || [];
-    children.forEach(collectByLevel);
+
+    if (children.length === 0) {
+      subtreeWidth.set(nodeId, nodeWidth);
+      return nodeWidth;
+    }
+
+    // Width = sum of children subtrees + gaps
+    let totalWidth = 0;
+    children.forEach((childId, index) => {
+      totalWidth += calcSubtreeWidth(childId);
+      if (index < children.length - 1) {
+        totalWidth += nodeSep;
+      }
+    });
+
+    subtreeWidth.set(nodeId, totalWidth);
+    return totalWidth;
   }
 
-  roots.forEach((root) => collectByLevel(root.id));
+  roots.forEach((root) => calcSubtreeWidth(root.id));
 
-  // Position storage
+  // Position nodes top-down
   const positions = new Map<string, { x: number; y: number }>();
 
-  // BOTTOM-UP: Start from the deepest level
-  // Position all nodes at deepest level with even spacing
-  const deepestNodes = nodesByLevel.get(maxDepth) || [];
-  const totalWidth = deepestNodes.length * nodeWidth + (deepestNodes.length - 1) * nodeSep;
-  let currentX = -totalWidth / 2 + nodeWidth / 2;
+  function positionSubtree(nodeId: string, centerX: number): void {
+    const depth = nodeDepth.get(nodeId) ?? 0;
+    const y = levelYPositions.get(depth) ?? 0;
 
-  deepestNodes.forEach((nodeId) => {
-    const y = levelYPositions.get(maxDepth) ?? 0;
-    positions.set(nodeId, { x: currentX, y });
-    currentX += nodeWidth + nodeSep;
+    positions.set(nodeId, { x: centerX, y });
+
+    const children = childrenMap.get(nodeId) || [];
+    if (children.length === 0) return;
+
+    // Position children centered under this node
+    const myWidth = subtreeWidth.get(nodeId) || nodeWidth;
+    let childX = centerX - myWidth / 2;
+
+    children.forEach((childId) => {
+      const childWidth = subtreeWidth.get(childId) || nodeWidth;
+      const childCenterX = childX + childWidth / 2;
+
+      positionSubtree(childId, childCenterX);
+
+      childX += childWidth + nodeSep;
+    });
+  }
+
+  // Position all root trees
+  const totalRootWidth = roots.reduce((sum, root, index) => {
+    return sum + (subtreeWidth.get(root.id) || nodeWidth) + (index > 0 ? nodeSep * 2 : 0);
+  }, 0);
+
+  let rootX = -totalRootWidth / 2;
+  roots.forEach((root, index) => {
+    if (index > 0) rootX += nodeSep * 2;
+    const rootWidth = subtreeWidth.get(root.id) || nodeWidth;
+    positionSubtree(root.id, rootX + rootWidth / 2);
+    rootX += rootWidth;
   });
-
-  // Work up from bottom, positioning parents at center of their children
-  for (let level = maxDepth - 1; level >= 0; level--) {
-    const nodesAtLevel = nodesByLevel.get(level) || [];
-    const y = levelYPositions.get(level) ?? 0;
-
-    nodesAtLevel.forEach((nodeId) => {
-      const children = childrenMap.get(nodeId) || [];
-
-      if (children.length > 0) {
-        // Get children's X positions
-        const childXPositions = children.map((childId) => {
-          const pos = positions.get(childId);
-          return pos ? pos.x : 0;
-        });
-
-        // Center parent over children
-        const minChildX = Math.min(...childXPositions);
-        const maxChildX = Math.max(...childXPositions);
-        const centerX = (minChildX + maxChildX) / 2;
-
-        positions.set(nodeId, { x: centerX, y });
-      } else {
-        // Leaf node at this level (shouldn't happen often, but handle it)
-        // Find position based on order
-        const existingPositions = Array.from(positions.values()).map(p => p.x);
-        const maxX = existingPositions.length > 0 ? Math.max(...existingPositions) : 0;
-        positions.set(nodeId, { x: maxX + nodeWidth + nodeSep, y });
-      }
-    });
-  }
-
-  // Now ensure siblings at each non-bottom level have even spacing
-  // while keeping parents centered
-  for (let level = maxDepth - 1; level >= 0; level--) {
-    const nodesAtLevel = nodesByLevel.get(level) || [];
-
-    // Group by parent to handle siblings
-    const siblingGroups = new Map<string | null, string[]>();
-
-    nodesAtLevel.forEach((nodeId) => {
-      const parent = parentMap.get(nodeId) || null;
-      if (!siblingGroups.has(parent)) {
-        siblingGroups.set(parent, []);
-      }
-      siblingGroups.get(parent)!.push(nodeId);
-    });
-
-    // For each sibling group, ensure even spacing
-    siblingGroups.forEach((siblings) => {
-      if (siblings.length <= 1) return;
-
-      // Sort by current X position
-      siblings.sort((a, b) => {
-        const posA = positions.get(a);
-        const posB = positions.get(b);
-        return (posA?.x || 0) - (posB?.x || 0);
-      });
-
-      // Calculate the center of current positions
-      const currentPositions = siblings.map(id => positions.get(id)!.x);
-      const currentCenter = (Math.min(...currentPositions) + Math.max(...currentPositions)) / 2;
-
-      // Calculate even spacing
-      const totalSiblingWidth = siblings.length * nodeWidth + (siblings.length - 1) * nodeSep;
-      let newX = currentCenter - totalSiblingWidth / 2 + nodeWidth / 2;
-
-      siblings.forEach((siblingId) => {
-        const pos = positions.get(siblingId)!;
-        const oldX = pos.x;
-        const shift = newX - oldX;
-
-        // Move this sibling
-        positions.set(siblingId, { x: newX, y: pos.y });
-
-        // Also shift all descendants by the same amount
-        function shiftDescendants(nodeId: string, dx: number): void {
-          const children = childrenMap.get(nodeId) || [];
-          children.forEach((childId) => {
-            const childPos = positions.get(childId);
-            if (childPos) {
-              positions.set(childId, { x: childPos.x + dx, y: childPos.y });
-              shiftDescendants(childId, dx);
-            }
-          });
-        }
-
-        if (shift !== 0) {
-          shiftDescendants(siblingId, shift);
-        }
-
-        newX += nodeWidth + nodeSep;
-      });
-    });
-  }
 
   // Apply positions
   return nodes.map((node) => {
