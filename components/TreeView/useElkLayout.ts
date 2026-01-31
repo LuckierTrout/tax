@@ -163,17 +163,30 @@ export function useElkLayout() {
         const elkGraph = toElkGraph(nodes, edges, options);
 
         // Debug: log the graph structure
-        console.log('ELK Input:', JSON.stringify(elkGraph, null, 2));
+        console.log('=== ELK LAYOUT DEBUG ===');
+        console.log('Input nodes:', nodes.length);
+        console.log('Input edges:', edges.length);
+        console.log('Edge list:', edges.map(e => `${e.source} → ${e.target}`));
 
         // Run ELK layout algorithm
         const layoutedGraph = await elk.layout(elkGraph);
 
         // Debug: log the result
-        console.log('ELK Output:', JSON.stringify(layoutedGraph, null, 2));
+        console.log('ELK computed positions:');
+        layoutedGraph.children?.forEach((child) => {
+          console.log(`  ${child.id}: x=${child.x}, y=${child.y}`);
+        });
 
         // Apply layout results to nodes and edges
         const layoutedNodes = applyLayoutToNodes(nodes, layoutedGraph);
         const layoutedEdges = applyLayoutToEdges(edges, layoutedGraph);
+
+        // Debug: verify positions were applied
+        console.log('Final node positions:');
+        layoutedNodes.forEach((node) => {
+          console.log(`  ${node.id}: x=${node.position.x}, y=${node.position.y}`);
+        });
+        console.log('=== END ELK DEBUG ===');
 
         return { nodes: layoutedNodes, edges: layoutedEdges };
       } catch (error) {
