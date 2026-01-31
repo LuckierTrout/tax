@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ReactFlow,
   Background,
@@ -18,7 +18,7 @@ import {
 import '@xyflow/react/dist/style.css';
 
 import { TaxonomyNode as TaxonomyNodeComponent } from './TaxonomyNode';
-import { useElkLayout } from './useElkLayout';
+import { useTreeLayout } from './useTreeLayout';
 import { TaxonomyNode, TaxonomyLevel, LevelColorConfig, PillColorConfig } from '@/types/taxonomy';
 import { toReactFlowElements } from '@/lib/tree-utils';
 import { DEFAULT_LEVEL_COLORS_HEX } from '@/config/levels';
@@ -54,23 +54,39 @@ function TreeViewInner({
   audienceColors,
   geographyColors,
 }: TreeViewProps) {
-  const { getLayoutedElements } = useElkLayout();
+  const { getLayoutedElements } = useTreeLayout();
   const { fitView } = useReactFlow();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isExporting, setIsExporting] = useState(false);
-  const [isLayouting, setIsLayouting] = useState(false);
-
-  // Initialize with empty state - will be populated after layout
-  const [nodes, setNodesState, onNodesChange] = useNodesState<Node>([]);
-  const [edges, setEdgesState, onEdgesChange] = useEdgesState<Edge>([]);
 
   // Track the taxonomy data version to know when to re-layout
-  const prevVersionRef = useRef<string>('');
+  const taxonomyVersion = useMemo(() => {
+    return JSON.stringify(taxonomyNodes.map(n => ({ id: n.id, parentId: n.parentId, name: n.name, objective: n.objective })));
+  }, [taxonomyNodes]);
 
-  // Helper to enrich nodes with UI state (selection, colors, handlers)
-  const enrichNodesWithState = useCallback(
-    (layoutedNodes: Node[]): Node[] => {
-      return layoutedNodes.map((node) => {
+  // Create base elements from taxonomy data (only recalculates when taxonomy changes)
+  const baseElements = useMemo(() => {
+    const { nodes, edges } = toReactFlowElements(taxonomyNodes);
+    return getLayoutedElements(nodes, edges);
+  }, [taxonomyVersion, getLayoutedElements]);
+
+  const [nodes, setNodesState, onNodesChange] = useNodesState(baseElements.nodes);
+  const [edges, setEdgesState, onEdgesChange] = useEdgesState(baseElements.edges);
+
+  // Reset layout when taxonomy data actually changes (structure changes)
+  const prevVersionRef = useRef(taxonomyVersion);
+  useEffect(() => {
+    if (prevVersionRef.current !== taxonomyVersion) {
+      prevVersionRef.current = taxonomyVersion;
+      setNodesState(baseElements.nodes);
+      setEdgesState(baseElements.edges);
+    }
+  }, [taxonomyVersion, baseElements, setNodesState, setEdgesState]);
+
+  // Update node data (selection/highlight state) without changing positions
+  useEffect(() => {
+    setNodesState((currentNodes) =>
+      currentNodes.map((node) => {
         const nodeLevel = node.data?.level as TaxonomyLevel;
         const customColors = levelColors?.[nodeLevel] || DEFAULT_LEVEL_COLORS_HEX[nodeLevel];
         return {
@@ -92,60 +108,9 @@ function TreeViewInner({
             geographyColors,
           },
         };
-      });
-    },
-    [selectedNodeId, searchTerm, taxonomyNodes, onContextMenu, onAddChild, levelColors, audienceColors, geographyColors]
-  );
-
-  // Run ELK layout when taxonomy data changes
-  useEffect(() => {
-    const taxonomyVersion = JSON.stringify(
-      taxonomyNodes.map((n) => ({ id: n.id, parentId: n.parentId, name: n.name, objective: n.objective }))
+      })
     );
-
-    // Only re-layout if structure changed
-    if (prevVersionRef.current === taxonomyVersion) {
-      // Just update node state without re-layout
-      setNodesState((currentNodes) => enrichNodesWithState(currentNodes));
-      return;
-    }
-
-    prevVersionRef.current = taxonomyVersion;
-    setIsLayouting(true);
-
-    const runLayout = async () => {
-      try {
-        const { nodes: rawNodes, edges: rawEdges } = toReactFlowElements(taxonomyNodes);
-        const { nodes: layoutedNodes, edges: layoutedEdges } = await getLayoutedElements(
-          rawNodes,
-          rawEdges
-        );
-
-        const enrichedNodes = enrichNodesWithState(layoutedNodes);
-        setNodesState(enrichedNodes);
-        setEdgesState(layoutedEdges);
-
-        // Fit view after layout
-        setTimeout(() => {
-          fitView({ padding: 0.2, duration: 300 });
-        }, 50);
-      } catch (error) {
-        console.error('Layout failed:', error);
-      } finally {
-        setIsLayouting(false);
-      }
-    };
-
-    runLayout();
-  }, [taxonomyNodes, getLayoutedElements, enrichNodesWithState, setNodesState, setEdgesState, fitView]);
-
-  // Update node data (selection/highlight state) without changing positions
-  useEffect(() => {
-    setNodesState((currentNodes) => {
-      if (currentNodes.length === 0) return currentNodes;
-      return enrichNodesWithState(currentNodes);
-    });
-  }, [selectedNodeId, searchTerm, onContextMenu, onAddChild, levelColors, audienceColors, geographyColors, enrichNodesWithState, setNodesState]);
+  }, [selectedNodeId, searchTerm, taxonomyNodes, setNodesState, onContextMenu, onAddChild, levelColors, audienceColors, geographyColors]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
@@ -158,30 +123,50 @@ function TreeViewInner({
     onNodeSelect(null);
   }, [onNodeSelect]);
 
-  // Auto-organize: re-run ELK layout and fit to view
-  const handleAutoOrganize = useCallback(async () => {
-    setIsLayouting(true);
-    try {
-      const { nodes: freshNodes, edges: freshEdges } = toReactFlowElements(taxonomyNodes);
-      const { nodes: layoutedNodes, edges: layoutedEdges } = await getLayoutedElements(
-        freshNodes,
-        freshEdges
-      );
+  // Auto-organize: re-run layout and fit to view
+  const handleAutoOrganize = useCallback(() => {
+    // Get fresh elements from current taxonomy data
+    const { nodes: freshNodes, edges: freshEdges } = toReactFlowElements(taxonomyNodes);
 
-      const enrichedNodes = enrichNodesWithState(layoutedNodes);
-      setNodesState(enrichedNodes);
-      setEdgesState(layoutedEdges);
+    // Apply layout
+    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+      freshNodes,
+      freshEdges
+    );
 
-      // Wait for layout to apply, then fit view
-      setTimeout(() => {
-        fitView({ padding: 0.2, duration: 300 });
-      }, 50);
-    } catch (error) {
-      console.error('Auto-organize failed:', error);
-    } finally {
-      setIsLayouting(false);
-    }
-  }, [taxonomyNodes, getLayoutedElements, enrichNodesWithState, setNodesState, setEdgesState, fitView]);
+    // Preserve selection state and context menu handler
+    const nodesWithState = layoutedNodes.map((node) => {
+      const nodeLevel = node.data?.level as TaxonomyLevel;
+      const customColors = levelColors?.[nodeLevel] || DEFAULT_LEVEL_COLORS_HEX[nodeLevel];
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          isSelected: node.id === selectedNodeId,
+          isHighlighted:
+            searchTerm &&
+            taxonomyNodes
+              .find((n) => n.id === node.id)
+              ?.name.toLowerCase()
+              .includes(searchTerm.toLowerCase()),
+          onContextMenu,
+          onAddChild,
+          nodeId: node.id,
+          customColors,
+          audienceColors,
+          geographyColors,
+        },
+      };
+    });
+
+    setNodesState(nodesWithState);
+    setEdgesState(layoutedEdges);
+
+    // Wait for layout to apply, then fit view
+    setTimeout(() => {
+      fitView({ padding: 0.2, duration: 300 });
+    }, 50);
+  }, [taxonomyNodes, getLayoutedElements, selectedNodeId, searchTerm, setNodesState, setEdgesState, fitView, onContextMenu, onAddChild, levelColors, audienceColors, geographyColors]);
 
   // Fit to screen only (no re-layout)
   const handleFitToScreen = useCallback(() => {
@@ -194,9 +179,9 @@ function TreeViewInner({
 
     setIsExporting(true);
     try {
-      // First auto-organize with ELK
+      // First auto-organize
       const { nodes: freshNodes, edges: freshEdges } = toReactFlowElements(taxonomyNodes);
-      const { nodes: layoutedNodes, edges: layoutedEdges } = await getLayoutedElements(
+      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
         freshNodes,
         freshEdges
       );
@@ -205,16 +190,18 @@ function TreeViewInner({
       setEdgesState(layoutedEdges);
 
       // Wait for layout to apply
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       // Fit view to ensure all nodes are visible
       fitView({ padding: 0.3, duration: 0 });
 
       // Wait for fit view to complete
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       // Generate filename based on what's being exported
-      const pillarNode = selectedPillar ? taxonomyNodes.find((n) => n.id === selectedPillar) : null;
+      const pillarNode = selectedPillar
+        ? taxonomyNodes.find(n => n.id === selectedPillar)
+        : null;
       const filename = pillarNode
         ? `taxonomy-${pillarNode.name.toLowerCase().replace(/\s+/g, '-')}`
         : 'taxonomy-full';
@@ -233,30 +220,18 @@ function TreeViewInner({
   }, [isExporting, taxonomyNodes, getLayoutedElements, setNodesState, setEdgesState, fitView, selectedPillar]);
 
   // Custom minimap node color based on level
-  const nodeColor = useCallback(
-    (node: Node) => {
-      const level = node.data?.level as TaxonomyLevel;
-      if (level) {
-        const customColors = levelColors?.[level] || DEFAULT_LEVEL_COLORS_HEX[level];
-        return customColors.dot;
-      }
-      return '#cbd5e1';
-    },
-    [levelColors]
-  );
+  const nodeColor = useCallback((node: Node) => {
+    const level = node.data?.level as TaxonomyLevel;
+    if (level) {
+      // Use custom colors if available, otherwise use defaults
+      const customColors = levelColors?.[level] || DEFAULT_LEVEL_COLORS_HEX[level];
+      return customColors.dot;
+    }
+    return '#cbd5e1';
+  }, [levelColors]);
 
   return (
-    <div ref={containerRef} className="w-full h-full relative">
-      {/* Loading overlay */}
-      {isLayouting && (
-        <div className="absolute inset-0 bg-white/50 z-50 flex items-center justify-center">
-          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-lg shadow-lg">
-            <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-            <span className="text-sm text-gray-600">Organizing layout...</span>
-          </div>
-        </div>
-      )}
-
+    <div ref={containerRef} className="w-full h-full">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -270,8 +245,8 @@ function TreeViewInner({
         minZoom={0.1}
         maxZoom={2}
         defaultEdgeOptions={{
-          type: 'smoothstep',
-          style: { stroke: '#cbd5e1', strokeWidth: 2 },
+          type: 'step',
+          style: { stroke: '#94a3b8', strokeWidth: 2 },
         }}
       >
         <Background color="#f1f5f9" gap={20} />
@@ -289,15 +264,10 @@ function TreeViewInner({
           <div className="flex gap-2">
             <button
               onClick={handleAutoOrganize}
-              disabled={isLayouting}
-              className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg shadow-sm border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg shadow-sm border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               title="Re-organize and center the tree"
             >
-              {isLayouting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <LayoutGrid className="w-4 h-4" />
-              )}
+              <LayoutGrid className="w-4 h-4" />
               Auto-Organize
             </button>
             <button
