@@ -11,48 +11,95 @@ interface LayoutOptions {
   nodeSep?: number;
 }
 
-// Dynamic spacing constants
-const BASE_NODE_SEP = 60;  // Max horizontal spacing (small/sparse trees)
-const MIN_NODE_SEP = 40;   // Min horizontal spacing (large/dense trees) - ensures readable gaps
-const BASE_RANK_SEP = 200; // Max vertical spacing (shallow trees)
-const MIN_RANK_SEP = 170;  // Min vertical spacing (deep trees) - ensures readable gaps
+// Base dimensions
+const NODE_WIDTH = 220;
+const MIN_GAP_BETWEEN_TIERS = 60; // Minimum vertical gap between tiers
+const HORIZONTAL_NODE_GAP = 50;  // Gap between sibling nodes
 
-// Calculate dynamic spacing based on tree characteristics
-function calculateDynamicSpacing(
-  nodeCount: number,
-  maxDepth: number,
-  maxWidth: number
-): { nodeSep: number; rankSep: number } {
-  // Vertical scaling based on depth (1-5 levels)
-  // At depth 5, rankSep compresses to minimum
-  const depthScale = Math.max(0, Math.min(1, (5 - maxDepth) / 4));
+// Estimate node height based on content
+function estimateNodeHeight(nodeData: Record<string, unknown>): number {
+  let height = 0;
 
-  // Horizontal scaling based on max siblings at any level
-  // At width 15+, nodeSep compresses to minimum
-  const widthScale = Math.max(0, Math.min(1, (15 - maxWidth) / 14));
+  // Base: level label + name + padding
+  height += 70;
 
-  // Overall density scaling based on total node count
-  // At 100+ nodes, both compress to minimum
-  const countScale = Math.max(0, Math.min(1, (100 - nodeCount) / 80));
+  // Objective adds height (only for pillar, narrative_theme, subject)
+  const objective = nodeData.objective as string | undefined;
+  if (objective) {
+    // Estimate ~20px per line, max 3 lines shown
+    const lines = Math.min(3, Math.ceil(objective.length / 30));
+    height += 20 + (lines * 16);
+  }
 
-  // Combine factors - use the more restrictive scale for each axis
-  const nodeSep = MIN_NODE_SEP + (BASE_NODE_SEP - MIN_NODE_SEP) * Math.min(widthScale, countScale);
-  const rankSep = MIN_RANK_SEP + (BASE_RANK_SEP - MIN_RANK_SEP) * Math.min(depthScale, countScale);
+  // Audiences add height
+  const audiences = nodeData.audiences as string[] | undefined;
+  if (audiences && audiences.length > 0) {
+    // Pills wrap, estimate rows
+    const pillsPerRow = 3;
+    const rows = Math.ceil(audiences.length / pillsPerRow);
+    height += 10 + (rows * 22);
+  }
 
-  return {
-    nodeSep: Math.round(nodeSep),
-    rankSep: Math.round(rankSep)
-  };
+  // Geographies add height
+  const geographies = nodeData.geographies as string[] | undefined;
+  if (geographies && geographies.length > 0) {
+    const pillsPerRow = 3;
+    const rows = Math.ceil(geographies.length / pillsPerRow);
+    height += 10 + (rows * 22);
+  }
+
+  return height;
 }
 
-// Improved tree layout that aligns nodes by level (like an org chart)
+// Calculate the maximum height of nodes at each level
+function calculateLevelHeights(
+  nodes: Node[],
+  nodeDepth: Map<string, number>
+): Map<number, number> {
+  const levelHeights = new Map<number, number>();
+
+  nodes.forEach((node) => {
+    const depth = nodeDepth.get(node.id) ?? 0;
+    const nodeHeight = estimateNodeHeight(node.data as Record<string, unknown>);
+
+    const currentMax = levelHeights.get(depth) || 0;
+    if (nodeHeight > currentMax) {
+      levelHeights.set(depth, nodeHeight);
+    }
+  });
+
+  return levelHeights;
+}
+
+// Calculate cumulative Y positions for each level based on actual heights
+function calculateLevelYPositions(
+  levelHeights: Map<number, number>,
+  maxDepth: number,
+  minGap: number
+): Map<number, number> {
+  const levelY = new Map<number, number>();
+  let currentY = 0;
+
+  for (let level = 0; level <= maxDepth; level++) {
+    levelY.set(level, currentY);
+
+    // Add the height of this level + gap for next level
+    const levelHeight = levelHeights.get(level) || 100;
+    currentY += levelHeight + minGap;
+  }
+
+  return levelY;
+}
+
+// Improved tree layout with content-aware vertical spacing
 function calculateTreeLayout(
   nodes: Node[],
   edges: Edge[],
   options: LayoutOptions
 ): Node[] {
   const {
-    nodeWidth = 180,
+    nodeWidth = NODE_WIDTH,
+    nodeSep = HORIZONTAL_NODE_GAP,
   } = options;
 
   if (nodes.length === 0) return nodes;
@@ -83,18 +130,16 @@ function calculateTreeLayout(
 
   roots.forEach((root) => setDepth(root.id, 0));
 
-  // Calculate tree characteristics for dynamic spacing
+  // Calculate max depth
   const maxDepth = nodes.length > 0
-    ? Math.max(...Array.from(nodeDepth.values())) + 1
-    : 1;
-  const maxWidth = childrenMap.size > 0
-    ? Math.max(...Array.from(childrenMap.values()).map(c => c.length), 1)
-    : 1;
+    ? Math.max(...Array.from(nodeDepth.values()))
+    : 0;
 
-  // Get dynamic spacing based on tree size and shape
-  const { nodeSep, rankSep } = options.nodeSep !== undefined && options.rankSep !== undefined
-    ? { nodeSep: options.nodeSep, rankSep: options.rankSep }  // Use provided values if explicit
-    : calculateDynamicSpacing(nodes.length, maxDepth, maxWidth);
+  // Calculate height of tallest node at each level
+  const levelHeights = calculateLevelHeights(nodes, nodeDepth);
+
+  // Calculate Y position for each level based on cumulative heights
+  const levelYPositions = calculateLevelYPositions(levelHeights, maxDepth, MIN_GAP_BETWEEN_TIERS);
 
   // Group nodes by level
   const nodesByLevel = new Map<number, string[]>();
@@ -127,7 +172,8 @@ function calculateTreeLayout(
 
   leafNodes.forEach((leafId) => {
     const depth = nodeDepth.get(leafId) ?? 0;
-    positions.set(leafId, { x: leafX, y: depth * rankSep });
+    const y = levelYPositions.get(depth) ?? 0;
+    positions.set(leafId, { x: leafX, y });
     leafX += nodeWidth + nodeSep;
   });
 
@@ -136,6 +182,7 @@ function calculateTreeLayout(
 
   for (let level = maxLevels - 2; level >= 0; level--) {
     const nodesAtLevel = nodesByLevel.get(level) || [];
+    const y = levelYPositions.get(level) ?? 0;
 
     nodesAtLevel.forEach((nodeId) => {
       const children = childrenMap.get(nodeId) || [];
@@ -147,18 +194,18 @@ function calculateTreeLayout(
           return pos ? pos.x : 0;
         });
         const centerX = (Math.min(...childXPositions) + Math.max(...childXPositions)) / 2;
-        positions.set(nodeId, { x: centerX, y: level * rankSep });
+        positions.set(nodeId, { x: centerX, y });
       } else {
-        // Leaf node already positioned
+        // Leaf node already positioned, just update Y if needed
         const pos = positions.get(nodeId);
         if (pos) {
-          positions.set(nodeId, { x: pos.x, y: level * rankSep });
+          positions.set(nodeId, { x: pos.x, y });
         }
       }
     });
   }
 
-  // Apply positions to nodes (adjusting for node width/height)
+  // Apply positions to nodes (adjusting for node width)
   return nodes.map((node) => {
     const pos = positions.get(node.id) || { x: 0, y: 0 };
     return {
