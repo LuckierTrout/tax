@@ -20,6 +20,65 @@ const levelColors: Record<string, { bg: string; border: string; text: string }> 
   subtopic: { bg: '#fff7ed', border: '#fb923c', text: '#7c2d12' },
 };
 
+// Generate a smoothstep path between two points (like ReactFlow)
+function generateSmoothstepPath(
+  sourceX: number,
+  sourceY: number,
+  targetX: number,
+  targetY: number
+): string {
+  const midY = (sourceY + targetY) / 2;
+  const borderRadius = 8;
+
+  // Simple case: straight down
+  if (Math.abs(sourceX - targetX) < 1) {
+    return `M${sourceX},${sourceY} L${targetX},${targetY}`;
+  }
+
+  // Calculate the path with rounded corners
+  const goingRight = targetX > sourceX;
+  const dx = Math.abs(targetX - sourceX);
+  const dy = Math.abs(midY - sourceY);
+  const radius = Math.min(borderRadius, dx / 2, dy / 2);
+
+  if (radius < 1) {
+    // Too small for curves, use straight lines
+    return `M${sourceX},${sourceY} L${sourceX},${midY} L${targetX},${midY} L${targetX},${targetY}`;
+  }
+
+  // Build path with rounded corners
+  let path = `M${sourceX},${sourceY}`;
+
+  // First vertical segment
+  path += ` L${sourceX},${midY - radius}`;
+
+  // First curve
+  if (goingRight) {
+    path += ` Q${sourceX},${midY} ${sourceX + radius},${midY}`;
+  } else {
+    path += ` Q${sourceX},${midY} ${sourceX - radius},${midY}`;
+  }
+
+  // Horizontal segment
+  if (goingRight) {
+    path += ` L${targetX - radius},${midY}`;
+  } else {
+    path += ` L${targetX + radius},${midY}`;
+  }
+
+  // Second curve
+  if (goingRight) {
+    path += ` Q${targetX},${midY} ${targetX},${midY + radius}`;
+  } else {
+    path += ` Q${targetX},${midY} ${targetX},${midY + radius}`;
+  }
+
+  // Final vertical segment
+  path += ` L${targetX},${targetY}`;
+
+  return path;
+}
+
 // Generate SVG from ReactFlow container
 function generateSVG(
   containerElement: HTMLElement,
@@ -31,27 +90,52 @@ function generateSVG(
     throw new Error('No nodes found to export');
   }
 
-  // Get edge paths
-  const edgePaths = containerElement.querySelectorAll('.react-flow__edge path');
+  // Build node position map
+  const nodePositions = new Map<string, { x: number; y: number; width: number; height: number }>();
 
   // Calculate bounds from node positions
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
   nodeElements.forEach((node) => {
     const nodeEl = node as HTMLElement;
+    const nodeId = nodeEl.getAttribute('data-id');
     const nodeTransform = nodeEl.style.transform;
     const nodeMatch = nodeTransform.match(/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/);
 
-    if (nodeMatch) {
+    if (nodeMatch && nodeId) {
       const nodeX = parseFloat(nodeMatch[1]);
       const nodeY = parseFloat(nodeMatch[2]);
       const nodeWidth = nodeEl.offsetWidth;
       const nodeHeight = nodeEl.offsetHeight;
 
+      nodePositions.set(nodeId, { x: nodeX, y: nodeY, width: nodeWidth, height: nodeHeight });
+
       minX = Math.min(minX, nodeX);
       minY = Math.min(minY, nodeY);
       maxX = Math.max(maxX, nodeX + nodeWidth);
       maxY = Math.max(maxY, nodeY + nodeHeight);
+    }
+  });
+
+  // Get edge connections from edge elements
+  const edgeElements = containerElement.querySelectorAll('.react-flow__edge');
+  const edges: Array<{ source: string; target: string }> = [];
+  const seenEdges = new Set<string>();
+
+  edgeElements.forEach((edge) => {
+    const edgeId = edge.getAttribute('data-id');
+    if (edgeId && !seenEdges.has(edgeId)) {
+      seenEdges.add(edgeId);
+      // Edge IDs are typically in format "source-target" or similar
+      // Try to extract from aria-label or data attributes
+      const ariaLabel = edge.getAttribute('aria-label');
+      if (ariaLabel) {
+        // Format: "Edge from nodeA to nodeB"
+        const match = ariaLabel.match(/Edge from (.+) to (.+)/);
+        if (match) {
+          edges.push({ source: match[1], target: match[2] });
+        }
+      }
     }
   });
 
@@ -80,17 +164,22 @@ function generateSVG(
   bg.setAttribute('fill', backgroundColor);
   svg.appendChild(bg);
 
-  // Add edges
-  edgePaths.forEach((path) => {
-    const pathEl = path as SVGPathElement;
-    const d = pathEl.getAttribute('d');
-    if (d) {
+  // Add edges based on node positions
+  edges.forEach(({ source, target }) => {
+    const sourcePos = nodePositions.get(source);
+    const targetPos = nodePositions.get(target);
+
+    if (sourcePos && targetPos) {
+      // Calculate connection points (bottom center of source, top center of target)
+      const sourceX = sourcePos.x + sourcePos.width / 2 - minX;
+      const sourceY = sourcePos.y + sourcePos.height - minY; // bottom of source
+      const targetX = targetPos.x + targetPos.width / 2 - minX;
+      const targetY = targetPos.y - minY; // top of target
+
+      const pathD = generateSmoothstepPath(sourceX, sourceY, targetX, targetY);
+
       const newPath = document.createElementNS(svgNS, 'path');
-      // Adjust path coordinates
-      const adjustedD = d.replace(/([ML])\s*([\d.-]+),\s*([\d.-]+)/g, (_, cmd, x, y) => {
-        return `${cmd}${parseFloat(x) - minX},${parseFloat(y) - minY}`;
-      });
-      newPath.setAttribute('d', adjustedD);
+      newPath.setAttribute('d', pathD);
       newPath.setAttribute('stroke', '#94a3b8');
       newPath.setAttribute('stroke-width', '2');
       newPath.setAttribute('fill', 'none');
@@ -101,14 +190,14 @@ function generateSVG(
   // Add nodes
   nodeElements.forEach((node) => {
     const nodeEl = node as HTMLElement;
-    const nodeTransform = nodeEl.style.transform;
-    const nodeMatch = nodeTransform.match(/translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/);
+    const nodeId = nodeEl.getAttribute('data-id');
+    const pos = nodeId ? nodePositions.get(nodeId) : null;
 
-    if (nodeMatch) {
-      const nodeX = parseFloat(nodeMatch[1]) - minX;
-      const nodeY = parseFloat(nodeMatch[2]) - minY;
-      const nodeWidth = nodeEl.offsetWidth;
-      const nodeHeight = nodeEl.offsetHeight;
+    if (pos) {
+      const nodeX = pos.x - minX;
+      const nodeY = pos.y - minY;
+      const nodeWidth = pos.width;
+      const nodeHeight = pos.height;
 
       // Get level from data attribute
       const levelAttr = nodeEl.querySelector('[data-level]')?.getAttribute('data-level');
