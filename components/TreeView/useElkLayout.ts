@@ -12,34 +12,40 @@ interface LayoutOptions {
   direction?: 'DOWN' | 'RIGHT' | 'UP' | 'LEFT';
 }
 
-// Default node dimensions
-const DEFAULT_NODE_WIDTH = 180;
-const DEFAULT_NODE_HEIGHT = 120;
+// Default node dimensions - generous estimates to account for objectives and pills
+const DEFAULT_NODE_WIDTH = 220;
+const DEFAULT_NODE_HEIGHT = 180;
 
 // ELK layout options optimized for taxonomy/org-chart hierarchies
 const getLayoutOptions = (direction: string = 'DOWN') => ({
   'elk.algorithm': 'layered',
   'elk.direction': direction,
-  // Spacing between nodes at the same level
-  'elk.spacing.nodeNode': '50',
-  // Spacing between levels (ranks)
-  'elk.layered.spacing.nodeNodeBetweenLayers': '80',
+  // Spacing between nodes at the same level (horizontal)
+  'elk.spacing.nodeNode': '80',
+  // Spacing between levels/layers (vertical)
+  'elk.layered.spacing.nodeNodeBetweenLayers': '120',
   // Base spacing value
-  'elk.layered.spacing.baseValue': '30',
+  'elk.layered.spacing.baseValue': '50',
+  // Edge spacing
+  'elk.spacing.edgeEdge': '30',
+  'elk.spacing.edgeNode': '40',
   // Edge routing - ORTHOGONAL gives us right-angle connections
   'elk.edgeRouting': 'ORTHOGONAL',
-  // Ensure edges connect at proper ports
+  // Layer spacing (between ranks)
+  'elk.layered.spacing.edgeNodeBetweenLayers': '40',
+  'elk.layered.spacing.edgeEdgeBetweenLayers': '20',
+  // Crossing minimization for cleaner layout
   'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
-  // Center nodes under their children
-  'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
-  // Spacing for edge-edge
-  'elk.spacing.edgeEdge': '20',
-  // Spacing for edge-node
-  'elk.spacing.edgeNode': '30',
+  // Node placement strategy - BRANDES_KOEPF gives balanced, centered results
+  'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+  // Favor straight edges
+  'elk.layered.nodePlacement.favorStraightEdges': 'true',
   // Port alignment
   'elk.portAlignment.default': 'CENTER',
-  // Hierarchical port positioning
+  // Consider model order for consistent sibling ordering
   'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
+  // Thoroughness for better results (higher = better but slower)
+  'elk.layered.thoroughness': '10',
 });
 
 /**
