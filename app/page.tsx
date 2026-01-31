@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TaxonomyNode, TaxonomySettings, ViewMode, TaxonomyLevel } from '@/types/taxonomy';
 import { filterByPillar, searchNodes, getNodesByLevel } from '@/lib/tree-utils';
-import { getChildLevel, LEVEL_LABELS } from '@/config/levels';
+import { getChildLevel, LEVEL_LABELS, LEVEL_CHILDREN } from '@/config/levels';
 
 import { TreeView } from '@/components/TreeView';
 import { ColumnView } from '@/components/ColumnView';
@@ -15,6 +15,7 @@ import { NodePanel } from '@/components/NodePanel';
 import { NodeForm } from '@/components/NodeForm';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { SettingsPanel } from '@/components/SettingsPanel';
+import { ContextMenu } from '@/components/ContextMenu';
 import { Plus, Settings } from 'lucide-react';
 
 interface FormState {
@@ -32,6 +33,12 @@ interface DeleteState {
   nodeId: string;
   nodeName: string;
   descendantCount: number;
+}
+
+interface ContextMenuState {
+  x: number;
+  y: number;
+  nodeId: string;
 }
 
 export default function TaxonomyPage() {
@@ -52,6 +59,7 @@ export default function TaxonomyPage() {
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   // Fetch data
   const fetchNodes = useCallback(async () => {
@@ -246,6 +254,153 @@ export default function TaxonomyPage() {
     handleAddNode(selectedNode.id, childLevel);
   };
 
+  // Context menu handlers
+  const handleContextMenu = useCallback((e: React.MouseEvent, nodeId: string) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, nodeId });
+  }, []);
+
+  const handleContextMenuClose = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  const handleContextMenuEdit = useCallback(() => {
+    if (!contextMenu) return;
+    const node = nodes.find((n) => n.id === contextMenu.nodeId);
+    if (!node) return;
+
+    setFormState({
+      isOpen: true,
+      mode: 'edit',
+      level: node.level,
+      parentId: node.parentId,
+      nodeId: node.id,
+      initialData: {
+        name: node.name,
+        description: node.description,
+        objective: node.objective,
+        notes: node.notes,
+      },
+    });
+  }, [contextMenu, nodes]);
+
+  const handleContextMenuDelete = useCallback(() => {
+    if (!contextMenu) return;
+    const node = nodes.find((n) => n.id === contextMenu.nodeId);
+    if (!node) return;
+
+    const descendants = nodes.filter((n) => {
+      let current = n;
+      while (current.parentId) {
+        if (current.parentId === node.id) return true;
+        current = nodes.find((p) => p.id === current.parentId) || current;
+        if (current.parentId === null) break;
+      }
+      return false;
+    });
+
+    setDeleteState({
+      isOpen: true,
+      nodeId: node.id,
+      nodeName: node.name,
+      descendantCount: descendants.length,
+    });
+  }, [contextMenu, nodes]);
+
+  // Move Up: Node becomes sibling of its current parent (one level higher)
+  const handleMoveUp = useCallback(async () => {
+    if (!contextMenu) return;
+    const node = nodes.find((n) => n.id === contextMenu.nodeId);
+    if (!node || !node.parentId) return; // Can't move up if no parent (pillar)
+
+    const parent = nodes.find((n) => n.id === node.parentId);
+    if (!parent) return;
+
+    // New parent becomes the grandparent (parent's parent)
+    const newParentId = parent.parentId;
+    // New level becomes parent's level
+    const newLevel = parent.level;
+
+    try {
+      const res = await fetch(`/api/taxonomy/${node.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentId: newParentId, level: newLevel }),
+      });
+
+      if (!res.ok) throw new Error('Failed to move node up');
+      const { node: updatedNode } = await res.json();
+      setNodes((prev) =>
+        prev.map((n) => (n.id === updatedNode.id ? updatedNode : n))
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Move failed');
+    }
+  }, [contextMenu, nodes]);
+
+  // Move Down: Node becomes child of one of its siblings (one level lower)
+  const handleMoveDown = useCallback(async () => {
+    if (!contextMenu) return;
+    const node = nodes.find((n) => n.id === contextMenu.nodeId);
+    if (!node) return;
+
+    // Check if node can move down (subtopics can't)
+    const childLevel = LEVEL_CHILDREN[node.level];
+    if (!childLevel) return;
+
+    // Find siblings (nodes with same parent, excluding self)
+    const siblings = nodes.filter(
+      (n) => n.parentId === node.parentId && n.id !== node.id
+    );
+
+    if (siblings.length === 0) {
+      alert('No sibling available to become the new parent');
+      return;
+    }
+
+    // Use the first sibling (by order) as the new parent
+    const sortedSiblings = siblings.sort((a, b) => a.order - b.order);
+    const newParent = sortedSiblings[0];
+
+    // New level is child level
+    const newLevel = childLevel;
+
+    try {
+      const res = await fetch(`/api/taxonomy/${node.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentId: newParent.id, level: newLevel }),
+      });
+
+      if (!res.ok) throw new Error('Failed to move node down');
+      const { node: updatedNode } = await res.json();
+      setNodes((prev) =>
+        prev.map((n) => (n.id === updatedNode.id ? updatedNode : n))
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Move failed');
+    }
+  }, [contextMenu, nodes]);
+
+  // Helper to check if node can move up (has a parent)
+  const canMoveUp = useCallback((nodeId: string) => {
+    const node = nodes.find((n) => n.id === nodeId);
+    return node ? !!node.parentId : false;
+  }, [nodes]);
+
+  // Helper to check if node can move down (not subtopic and has siblings)
+  const canMoveDown = useCallback((nodeId: string) => {
+    const node = nodes.find((n) => n.id === nodeId);
+    if (!node) return false;
+    // Can't move down if already at bottom level
+    if (!LEVEL_CHILDREN[node.level]) return false;
+    // Need siblings to become parent
+    const siblings = nodes.filter(
+      (n) => n.parentId === node.parentId && n.id !== node.id
+    );
+    return siblings.length > 0;
+  }, [nodes]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -321,6 +476,7 @@ export default function TaxonomyPage() {
               searchTerm={searchTerm}
               onNodeSelect={handleNodeSelect}
               selectedPillar={selectedPillarId}
+              onContextMenu={handleContextMenu}
             />
           ) : (
             <ColumnView
@@ -381,6 +537,21 @@ export default function TaxonomyPage() {
         onClose={() => setSettingsOpen(false)}
         onSettingsChange={setSettings}
       />
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onEdit={handleContextMenuEdit}
+          onDelete={handleContextMenuDelete}
+          onMoveUp={handleMoveUp}
+          onMoveDown={handleMoveDown}
+          onClose={handleContextMenuClose}
+          canMoveUp={canMoveUp(contextMenu.nodeId)}
+          canMoveDown={canMoveDown(contextMenu.nodeId)}
+        />
+      )}
     </div>
   );
 }

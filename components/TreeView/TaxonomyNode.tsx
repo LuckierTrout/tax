@@ -15,9 +15,11 @@ interface TaxonomyNodeData {
   geographies?: string[];
   isSelected?: boolean;
   isHighlighted?: boolean;
+  onContextMenu?: (e: React.MouseEvent, nodeId: string) => void;
+  nodeId?: string;
 }
 
-function TaxonomyNodeComponent({ data, selected }: NodeProps) {
+function TaxonomyNodeComponent({ data, selected, id }: NodeProps) {
   const nodeData = data as unknown as TaxonomyNodeData;
   const colors = LEVEL_COLORS[nodeData.level];
   const isSelected = nodeData.isSelected || selected;
@@ -26,8 +28,17 @@ function TaxonomyNodeComponent({ data, selected }: NodeProps) {
   const hasGeographies = nodeData.geographies && nodeData.geographies.length > 0;
   const showPills = hasAudiences || hasGeographies;
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (nodeData.onContextMenu) {
+      nodeData.onContextMenu(e, id);
+    }
+  };
+
   return (
     <div
+      onContextMenu={handleContextMenu}
       className={clsx(
         'px-4 py-3 rounded-lg border-2 bg-white shadow-sm min-w-[140px] max-w-[220px] cursor-pointer transition-all',
         colors.border,
@@ -35,6 +46,7 @@ function TaxonomyNodeComponent({ data, selected }: NodeProps) {
         isSelected && 'ring-2 ring-blue-500 ring-offset-2',
         nodeData.isHighlighted && 'ring-2 ring-yellow-400'
       )}
+      data-level={nodeData.level}
     >
       <Handle
         type="target"

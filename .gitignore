@@ -64,3 +64,11 @@ Thumbs.db
 *.tmp
 *.temp
 .cache
+.env*.local
+
+# AI agent/IDE configuration
+.agent/
+.claude/
+.cursor/
+.gemini/
+_bmad/
