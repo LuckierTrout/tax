@@ -5,7 +5,7 @@ import { TaxonomyNode, TaxonomySettings, ViewMode, TaxonomyLevel } from '@/types
 import { filterByPillar, searchNodes, getNodesByLevel } from '@/lib/tree-utils';
 import { getChildLevel, LEVEL_LABELS, LEVEL_CHILDREN } from '@/config/levels';
 
-import { TreeView } from '@/components/TreeView';
+import { TreeView, TreeViewExportFunctions } from '@/components/TreeView';
 import { ColumnView } from '@/components/ColumnView';
 import { ViewToggle } from '@/components/ViewToggle';
 import { PillarSelector } from '@/components/PillarSelector';
@@ -61,8 +61,8 @@ export default function TaxonomyPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
-  // PDF export function from TreeView
-  const [exportPDFFn, setExportPDFFn] = useState<(() => Promise<void>) | null>(null);
+  // Export functions from TreeView
+  const [exportFns, setExportFns] = useState<TreeViewExportFunctions | null>(null);
 
   // Fetch data
   const fetchNodes = useCallback(async () => {
@@ -446,8 +446,11 @@ export default function TaxonomyPage() {
             <SearchFilter value={searchTerm} onChange={setSearchTerm} />
             <ExportMenu
               onExport={handleExport}
-              onExportPDF={exportPDFFn || undefined}
-              showPdfOption={viewMode === 'tree'}
+              onExportPDF={exportFns?.exportPDF}
+              onExportSVG={exportFns?.exportSVG}
+              onExportJPG={exportFns?.exportJPG}
+              onExportPNG={exportFns?.exportPNG}
+              showImageOptions={viewMode === 'tree'}
             />
             <button
               onClick={() => setSettingsOpen(true)}
@@ -497,7 +500,7 @@ export default function TaxonomyPage() {
               levelColors={settings?.levelColors}
               audienceColors={settings?.audienceColors}
               geographyColors={settings?.geographyColors}
-              onExportReady={(fn) => setExportPDFFn(() => fn)}
+              onExportReady={setExportFns}
             />
           ) : (
             <ColumnView

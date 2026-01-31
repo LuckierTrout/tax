@@ -1,16 +1,26 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Download, ChevronDown, FileJson, FileSpreadsheet, FileImage } from 'lucide-react';
+import { Download, ChevronDown, FileJson, FileSpreadsheet, FileImage, FileCode, Image } from 'lucide-react';
 import clsx from 'clsx';
 
 interface ExportMenuProps {
   onExport: (format: 'json' | 'csv') => void;
   onExportPDF?: () => void;
-  showPdfOption?: boolean;
+  onExportSVG?: () => void;
+  onExportJPG?: () => void;
+  onExportPNG?: () => void;
+  showImageOptions?: boolean;
 }
 
-export function ExportMenu({ onExport, onExportPDF, showPdfOption = true }: ExportMenuProps) {
+export function ExportMenu({
+  onExport,
+  onExportPDF,
+  onExportSVG,
+  onExportJPG,
+  onExportPNG,
+  showImageOptions = true
+}: ExportMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -40,6 +50,27 @@ export function ExportMenu({ onExport, onExportPDF, showPdfOption = true }: Expo
     setIsOpen(false);
   };
 
+  const handleExportSVG = () => {
+    if (onExportSVG) {
+      onExportSVG();
+    }
+    setIsOpen(false);
+  };
+
+  const handleExportJPG = () => {
+    if (onExportJPG) {
+      onExportJPG();
+    }
+    setIsOpen(false);
+  };
+
+  const handleExportPNG = () => {
+    if (onExportPNG) {
+      onExportPNG();
+    }
+    setIsOpen(false);
+  };
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
@@ -58,15 +89,51 @@ export function ExportMenu({ onExport, onExportPDF, showPdfOption = true }: Expo
 
       {isOpen && (
         <div className="absolute top-full right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
-          {showPdfOption && onExportPDF && (
-            <button
-              onClick={handleExportPDF}
-              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
-            >
-              <FileImage className="w-4 h-4 text-red-500" />
-              Export as PDF
-            </button>
+          {/* Image exports - only show when tree view is active */}
+          {showImageOptions && (
+            <>
+              {onExportPDF && (
+                <button
+                  onClick={handleExportPDF}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <FileImage className="w-4 h-4 text-red-500" />
+                  Export as PDF
+                </button>
+              )}
+              {onExportSVG && (
+                <button
+                  onClick={handleExportSVG}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <FileCode className="w-4 h-4 text-purple-500" />
+                  Export as SVG
+                </button>
+              )}
+              {onExportJPG && (
+                <button
+                  onClick={handleExportJPG}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <Image className="w-4 h-4 text-orange-500" />
+                  Export as JPG
+                </button>
+              )}
+              {onExportPNG && (
+                <button
+                  onClick={handleExportPNG}
+                  className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"
+                >
+                  <Image className="w-4 h-4 text-teal-500" />
+                  Export as PNG
+                </button>
+              )}
+              {(onExportPDF || onExportSVG || onExportJPG || onExportPNG) && (
+                <div className="border-t border-gray-100 my-1" />
+              )}
+            </>
           )}
+          {/* Data exports - always available */}
           <button
             onClick={() => handleExport('json')}
             className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 flex items-center gap-2"

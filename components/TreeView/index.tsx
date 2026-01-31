@@ -23,7 +23,13 @@ import { TaxonomyNode, TaxonomyLevel, LevelColorConfig, PillColorConfig } from '
 import { toReactFlowElements } from '@/lib/tree-utils';
 import { DEFAULT_LEVEL_COLORS_HEX } from '@/config/levels';
 import { LayoutGrid, Maximize2 } from 'lucide-react';
-import { exportReactFlowToPDF } from '@/lib/pdf-export';
+import {
+  exportReactFlowToPDF,
+  exportReactFlowToSVG,
+  exportReactFlowToJPG,
+  exportReactFlowToPNG,
+  ImageExportFormat,
+} from '@/lib/pdf-export';
 
 interface TreeViewProps {
   taxonomyNodes: TaxonomyNode[];
@@ -38,8 +44,11 @@ interface TreeViewProps {
   geographyColors?: Record<string, PillColorConfig>;
 }
 
-export interface TreeViewHandle {
+export interface TreeViewExportFunctions {
   exportPDF: () => Promise<void>;
+  exportSVG: () => Promise<void>;
+  exportJPG: () => Promise<void>;
+  exportPNG: () => Promise<void>;
 }
 
 const nodeTypes: NodeTypes = {
@@ -47,7 +56,7 @@ const nodeTypes: NodeTypes = {
 };
 
 interface TreeViewInnerProps extends TreeViewProps {
-  onExportReady?: (exportFn: () => Promise<void>) => void;
+  onExportReady?: (exportFns: TreeViewExportFunctions) => void;
 }
 
 function TreeViewInner({
@@ -181,55 +190,92 @@ function TreeViewInner({
     fitView({ padding: 0.2, duration: 300 });
   }, [fitView]);
 
-  // Export to PDF
+  // Prepare for export (auto-organize and fit view)
+  const prepareForExport = useCallback(async () => {
+    if (!containerRef.current) throw new Error('Container not ready');
+
+    // First auto-organize
+    const { nodes: freshNodes, edges: freshEdges } = toReactFlowElements(taxonomyNodes);
+    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+      freshNodes,
+      freshEdges
+    );
+
+    setNodesState(layoutedNodes);
+    setEdgesState(layoutedEdges);
+
+    // Wait for layout to apply
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    // Fit view to ensure all nodes are visible
+    fitView({ padding: 0.3, duration: 0 });
+
+    // Wait for fit view to complete
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // Generate filename based on what's being exported
+    const pillarNode = selectedPillar
+      ? taxonomyNodes.find(n => n.id === selectedPillar)
+      : null;
+    const filename = pillarNode
+      ? `taxonomy-${pillarNode.name.toLowerCase().replace(/\s+/g, '-')}`
+      : 'taxonomy-full';
+
+    return { container: containerRef.current, filename };
+  }, [taxonomyNodes, getLayoutedElements, setNodesState, setEdgesState, fitView, selectedPillar]);
+
+  // Export handlers
   const handleExportPDF = useCallback(async () => {
-    if (!containerRef.current) return;
-
     try {
-      // First auto-organize
-      const { nodes: freshNodes, edges: freshEdges } = toReactFlowElements(taxonomyNodes);
-      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
-        freshNodes,
-        freshEdges
-      );
-
-      setNodesState(layoutedNodes);
-      setEdgesState(layoutedEdges);
-
-      // Wait for layout to apply
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      // Fit view to ensure all nodes are visible
-      fitView({ padding: 0.3, duration: 0 });
-
-      // Wait for fit view to complete
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      // Generate filename based on what's being exported
-      const pillarNode = selectedPillar
-        ? taxonomyNodes.find(n => n.id === selectedPillar)
-        : null;
-      const filename = pillarNode
-        ? `taxonomy-${pillarNode.name.toLowerCase().replace(/\s+/g, '-')}`
-        : 'taxonomy-full';
-
-      await exportReactFlowToPDF(containerRef.current, {
-        filename,
-        scale: 2,
-        backgroundColor: '#f8fafc',
-      });
+      const { container, filename } = await prepareForExport();
+      await exportReactFlowToPDF(container, { filename, scale: 2, backgroundColor: '#f8fafc' });
     } catch (error) {
       console.error('Export failed:', error);
       alert('Failed to export PDF. Please try again.');
     }
-  }, [taxonomyNodes, getLayoutedElements, setNodesState, setEdgesState, fitView, selectedPillar]);
+  }, [prepareForExport]);
 
-  // Expose export function to parent
+  const handleExportSVG = useCallback(async () => {
+    try {
+      const { container, filename } = await prepareForExport();
+      await exportReactFlowToSVG(container, { filename, backgroundColor: '#f8fafc' });
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export SVG. Please try again.');
+    }
+  }, [prepareForExport]);
+
+  const handleExportJPG = useCallback(async () => {
+    try {
+      const { container, filename } = await prepareForExport();
+      await exportReactFlowToJPG(container, { filename, scale: 2, backgroundColor: '#f8fafc' });
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export JPG. Please try again.');
+    }
+  }, [prepareForExport]);
+
+  const handleExportPNG = useCallback(async () => {
+    try {
+      const { container, filename } = await prepareForExport();
+      await exportReactFlowToPNG(container, { filename, scale: 2, backgroundColor: '#f8fafc' });
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export PNG. Please try again.');
+    }
+  }, [prepareForExport]);
+
+  // Expose export functions to parent
   useEffect(() => {
     if (onExportReady) {
-      onExportReady(handleExportPDF);
+      onExportReady({
+        exportPDF: handleExportPDF,
+        exportSVG: handleExportSVG,
+        exportJPG: handleExportJPG,
+        exportPNG: handleExportPNG,
+      });
     }
-  }, [handleExportPDF, onExportReady]);
+  }, [handleExportPDF, handleExportSVG, handleExportJPG, handleExportPNG, onExportReady]);
 
   // Custom minimap node color based on level
   const nodeColor = useCallback((node: Node) => {
@@ -302,7 +348,7 @@ function TreeViewInner({
 
 // Wrap with ReactFlowProvider to access useReactFlow hook
 interface TreeViewWithRefProps extends TreeViewProps {
-  onExportReady?: (exportFn: () => Promise<void>) => void;
+  onExportReady?: (exportFns: TreeViewExportFunctions) => void;
 }
 
 export function TreeView({ onExportReady, ...props }: TreeViewWithRefProps) {
