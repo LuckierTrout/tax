@@ -32,6 +32,7 @@ interface TreeViewProps {
   onNodeSelect: (nodeId: string | null) => void;
   selectedPillar: string | null;
   onContextMenu?: (e: React.MouseEvent, nodeId: string) => void;
+  onAddChild?: (nodeId: string) => void;
 }
 
 const nodeTypes: NodeTypes = {
@@ -45,6 +46,7 @@ function TreeViewInner({
   onNodeSelect,
   selectedPillar,
   onContextMenu,
+  onAddChild,
 }: TreeViewProps) {
   const { getLayoutedElements } = useTreeLayout();
   const { fitView, setNodes, setEdges } = useReactFlow();
@@ -90,11 +92,12 @@ function TreeViewInner({
               ?.name.toLowerCase()
               .includes(searchTerm.toLowerCase()),
           onContextMenu,
+          onAddChild,
           nodeId: node.id,
         },
       }))
     );
-  }, [selectedNodeId, searchTerm, taxonomyNodes, setNodesState, onContextMenu]);
+  }, [selectedNodeId, searchTerm, taxonomyNodes, setNodesState, onContextMenu, onAddChild]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
@@ -131,6 +134,7 @@ function TreeViewInner({
             ?.name.toLowerCase()
             .includes(searchTerm.toLowerCase()),
         onContextMenu,
+        onAddChild,
         nodeId: node.id,
       },
     }));
@@ -142,7 +146,7 @@ function TreeViewInner({
     setTimeout(() => {
       fitView({ padding: 0.2, duration: 300 });
     }, 50);
-  }, [taxonomyNodes, getLayoutedElements, selectedNodeId, searchTerm, setNodesState, setEdgesState, fitView, onContextMenu]);
+  }, [taxonomyNodes, getLayoutedElements, selectedNodeId, searchTerm, setNodesState, setEdgesState, fitView, onContextMenu, onAddChild]);
 
   // Fit to screen only (no re-layout)
   const handleFitToScreen = useCallback(() => {

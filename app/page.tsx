@@ -254,6 +254,15 @@ export default function TaxonomyPage() {
     handleAddNode(selectedNode.id, childLevel);
   };
 
+  // Handler for adding child from TreeView node (plus button)
+  const handleAddChildFromTree = useCallback((nodeId: string) => {
+    const node = nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+    const childLevel = getChildLevel(node.level);
+    if (!childLevel) return;
+    handleAddNode(nodeId, childLevel);
+  }, [nodes, handleAddNode]);
+
   // Context menu handlers
   const handleContextMenu = useCallback((e: React.MouseEvent, nodeId: string) => {
     e.preventDefault();
@@ -477,6 +486,7 @@ export default function TaxonomyPage() {
               onNodeSelect={handleNodeSelect}
               selectedPillar={selectedPillarId}
               onContextMenu={handleContextMenu}
+              onAddChild={handleAddChildFromTree}
             />
           ) : (
             <ColumnView

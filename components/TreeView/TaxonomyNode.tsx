@@ -4,6 +4,7 @@ import { memo } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
 import { TaxonomyLevel, LEVELS_WITH_OBJECTIVE } from '@/types/taxonomy';
 import { LEVEL_COLORS, LEVEL_LABELS } from '@/config/levels';
+import { Plus } from 'lucide-react';
 import clsx from 'clsx';
 
 interface TaxonomyNodeData {
@@ -16,6 +17,7 @@ interface TaxonomyNodeData {
   isSelected?: boolean;
   isHighlighted?: boolean;
   onContextMenu?: (e: React.MouseEvent, nodeId: string) => void;
+  onAddChild?: (nodeId: string) => void;
   nodeId?: string;
 }
 
@@ -36,11 +38,21 @@ function TaxonomyNodeComponent({ data, selected, id }: NodeProps) {
     }
   };
 
+  const handleAddChild = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (nodeData.onAddChild) {
+      nodeData.onAddChild(id);
+    }
+  };
+
+  const canHaveChildren = nodeData.level !== 'subtopic';
+
   return (
     <div
       onContextMenu={handleContextMenu}
       className={clsx(
-        'px-4 py-3 rounded-lg border-2 bg-white shadow-sm min-w-[140px] max-w-[220px] cursor-pointer transition-all',
+        'group px-4 py-3 rounded-lg border-2 bg-white shadow-sm min-w-[140px] max-w-[220px] cursor-pointer transition-all relative',
         colors.border,
         colors.bg,
         isSelected && 'ring-2 ring-blue-500 ring-offset-2',
@@ -112,12 +124,22 @@ function TaxonomyNodeComponent({ data, selected, id }: NodeProps) {
         </div>
       )}
 
-      {nodeData.level !== 'subtopic' && (
-        <Handle
-          type="source"
-          position={Position.Bottom}
-          className="!bg-gray-400 !w-2 !h-2"
-        />
+      {canHaveChildren && (
+        <>
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            className="!bg-gray-400 !w-2 !h-2"
+          />
+          {/* Add child button - appears on hover */}
+          <button
+            onClick={handleAddChild}
+            className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-6 h-6 bg-white border-2 border-gray-300 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-150 hover:border-blue-500 hover:bg-blue-50 hover:scale-110 z-10"
+            title="Add child node"
+          >
+            <Plus className="w-3.5 h-3.5 text-gray-500 hover:text-blue-600" />
+          </button>
+        </>
       )}
     </div>
   );
