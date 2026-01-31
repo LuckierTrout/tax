@@ -154,28 +154,12 @@ export function NodePanel({
             {LEVEL_LABELS[node.level]}
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          {hasChanges && (
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-white bg-blue-500 rounded hover:bg-blue-600 disabled:opacity-50"
-            >
-              {isSaving ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <Check className="w-3 h-3" />
-              )}
-              Save
-            </button>
-          )}
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded"
-          >
-            <X className="w-5 h-5 text-gray-400" />
-          </button>
-        </div>
+        <button
+          onClick={onClose}
+          className="p-1 hover:bg-gray-100 rounded"
+        >
+          <X className="w-5 h-5 text-gray-400" />
+        </button>
       </div>
 
       {/* Content */}
@@ -396,6 +380,25 @@ export function NodePanel({
 
       {/* Actions */}
       <div className="p-4 border-t border-gray-200 space-y-2">
+        {/* Save button */}
+        <button
+          onClick={handleSave}
+          disabled={!hasChanges || isSaving}
+          className={clsx(
+            'w-full px-4 py-2 text-sm font-medium rounded-lg flex items-center justify-center gap-2',
+            hasChanges
+              ? 'text-white bg-blue-500 hover:bg-blue-600'
+              : 'text-gray-400 bg-gray-100 cursor-not-allowed'
+          )}
+        >
+          {isSaving ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Check className="w-4 h-4" />
+          )}
+          {isSaving ? 'Saving...' : hasChanges ? 'Save Changes' : 'Saved'}
+        </button>
+
         {childLevel && (
           <button
             onClick={onAddChild}
