@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Settings, Save } from 'lucide-react';
-import { TaxonomySettings } from '@/types/taxonomy';
+import { X, Plus, Trash2, Settings, Save, RotateCcw } from 'lucide-react';
+import { TaxonomySettings, TaxonomyLevel, LevelColorConfig } from '@/types/taxonomy';
+import { LEVEL_ORDER, LEVEL_LABELS, DEFAULT_LEVEL_COLORS_HEX } from '@/config/levels';
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -102,6 +103,50 @@ export function SettingsPanel({ isOpen, onClose, onSettingsChange }: SettingsPan
     const updated = {
       ...settings,
       availableGeographies: settings.availableGeographies.filter((g) => g !== geography),
+    };
+    setSettings(updated);
+    saveSettings(updated);
+  };
+
+  // Color settings helpers
+  const isValidHex = (hex: string): boolean => {
+    return /^#[0-9A-Fa-f]{6}$/.test(hex);
+  };
+
+  const getLevelColor = (level: TaxonomyLevel, property: keyof LevelColorConfig): string => {
+    if (settings?.levelColors?.[level]?.[property]) {
+      return settings.levelColors[level][property];
+    }
+    return DEFAULT_LEVEL_COLORS_HEX[level][property];
+  };
+
+  const updateLevelColor = (level: TaxonomyLevel, property: keyof LevelColorConfig, value: string) => {
+    if (!settings) return;
+
+    const currentColors = settings.levelColors || { ...DEFAULT_LEVEL_COLORS_HEX };
+    const updated = {
+      ...settings,
+      levelColors: {
+        ...currentColors,
+        [level]: {
+          ...currentColors[level],
+          [property]: value,
+        },
+      },
+    };
+    setSettings(updated);
+
+    // Only save if valid hex
+    if (isValidHex(value)) {
+      saveSettings(updated);
+    }
+  };
+
+  const resetLevelColors = () => {
+    if (!settings) return;
+    const updated = {
+      ...settings,
+      levelColors: { ...DEFAULT_LEVEL_COLORS_HEX },
     };
     setSettings(updated);
     saveSettings(updated);
@@ -217,6 +262,106 @@ export function SettingsPanel({ isOpen, onClose, onSettingsChange }: SettingsPan
                     <Plus className="w-4 h-4" />
                     Add
                   </button>
+                </div>
+              </div>
+
+              {/* Tier Colors Section */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700">Tier Colors</h3>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Customize the colors for each taxonomy level using hex codes.
+                    </p>
+                  </div>
+                  <button
+                    onClick={resetLevelColors}
+                    disabled={isSaving}
+                    className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded"
+                    title="Reset to default colors"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Reset
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  {LEVEL_ORDER.map((level) => (
+                    <div key={level} className="border border-gray-200 rounded-lg p-3">
+                      <div className="font-medium text-sm text-gray-800 mb-2">
+                        {LEVEL_LABELS[level]}
+                      </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        {/* Background Color */}
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Background</label>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-8 h-8 rounded border border-gray-300 flex-shrink-0"
+                              style={{ backgroundColor: getLevelColor(level, 'bg') }}
+                            />
+                            <input
+                              type="text"
+                              value={getLevelColor(level, 'bg')}
+                              onChange={(e) => updateLevelColor(level, 'bg', e.target.value)}
+                              placeholder="#FFFFFF"
+                              className={`w-full px-2 py-1 border rounded text-xs font-mono ${
+                                isValidHex(getLevelColor(level, 'bg'))
+                                  ? 'border-gray-300'
+                                  : 'border-red-400 bg-red-50'
+                              }`}
+                            />
+                          </div>
+                        </div>
+                        {/* Border Color */}
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Border</label>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-8 h-8 rounded border-2 flex-shrink-0"
+                              style={{ borderColor: getLevelColor(level, 'border'), backgroundColor: '#fff' }}
+                            />
+                            <input
+                              type="text"
+                              value={getLevelColor(level, 'border')}
+                              onChange={(e) => updateLevelColor(level, 'border', e.target.value)}
+                              placeholder="#000000"
+                              className={`w-full px-2 py-1 border rounded text-xs font-mono ${
+                                isValidHex(getLevelColor(level, 'border'))
+                                  ? 'border-gray-300'
+                                  : 'border-red-400 bg-red-50'
+                              }`}
+                            />
+                          </div>
+                        </div>
+                        {/* Dot/Text Color */}
+                        <div>
+                          <label className="block text-xs text-gray-500 mb-1">Dot/Text</label>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-8 h-8 rounded border border-gray-300 flex-shrink-0 flex items-center justify-center"
+                              style={{ backgroundColor: '#fff' }}
+                            >
+                              <div
+                                className="w-4 h-4 rounded-full"
+                                style={{ backgroundColor: getLevelColor(level, 'dot') }}
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              value={getLevelColor(level, 'dot')}
+                              onChange={(e) => updateLevelColor(level, 'dot', e.target.value)}
+                              placeholder="#000000"
+                              className={`w-full px-2 py-1 border rounded text-xs font-mono ${
+                                isValidHex(getLevelColor(level, 'dot'))
+                                  ? 'border-gray-300'
+                                  : 'border-red-400 bg-red-50'
+                              }`}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>

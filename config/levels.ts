@@ -1,4 +1,4 @@
-import { TaxonomyLevel } from '@/types/taxonomy';
+import { TaxonomyLevel, LevelColorConfig } from '@/types/taxonomy';
 
 export const LEVEL_HIERARCHY: Record<TaxonomyLevel, TaxonomyLevel | null> = {
   pillar: null,
@@ -64,6 +64,35 @@ export const LEVEL_ORDER: TaxonomyLevel[] = [
   'topic',
   'subtopic',
 ];
+
+// Default hex colors for each level (used when custom colors are not set)
+export const DEFAULT_LEVEL_COLORS_HEX: Record<TaxonomyLevel, LevelColorConfig> = {
+  pillar: {
+    bg: '#FAF5FF',      // purple-50
+    border: '#C084FC',  // purple-400
+    dot: '#A855F7',     // purple-500
+  },
+  narrative_theme: {
+    bg: '#EFF6FF',      // blue-50
+    border: '#60A5FA',  // blue-400
+    dot: '#3B82F6',     // blue-500
+  },
+  subject: {
+    bg: '#F0FDF4',      // green-50
+    border: '#4ADE80',  // green-400
+    dot: '#22C55E',     // green-500
+  },
+  topic: {
+    bg: '#FEFCE8',      // yellow-50
+    border: '#FACC15',  // yellow-400
+    dot: '#EAB308',     // yellow-500
+  },
+  subtopic: {
+    bg: '#FFF7ED',      // orange-50
+    border: '#FB923C',  // orange-400
+    dot: '#F97316',     // orange-500
+  },
+};
 
 export function getChildLevel(parentLevel: TaxonomyLevel | null): TaxonomyLevel | null {
   if (parentLevel === null) return 'pillar';

@@ -2,8 +2,8 @@
 
 import { memo } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
-import { TaxonomyLevel, LEVELS_WITH_OBJECTIVE } from '@/types/taxonomy';
-import { LEVEL_COLORS, LEVEL_LABELS } from '@/config/levels';
+import { TaxonomyLevel, LEVELS_WITH_OBJECTIVE, LevelColorConfig } from '@/types/taxonomy';
+import { LEVEL_LABELS } from '@/config/levels';
 import { Plus } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -19,11 +19,12 @@ interface TaxonomyNodeData {
   onContextMenu?: (e: React.MouseEvent, nodeId: string) => void;
   onAddChild?: (nodeId: string) => void;
   nodeId?: string;
+  customColors?: LevelColorConfig;
 }
 
 function TaxonomyNodeComponent({ data, selected, id }: NodeProps) {
   const nodeData = data as unknown as TaxonomyNodeData;
-  const colors = LEVEL_COLORS[nodeData.level];
+  const customColors = nodeData.customColors;
   const isSelected = nodeData.isSelected || selected;
   const showObjective = LEVELS_WITH_OBJECTIVE.includes(nodeData.level) && nodeData.objective;
   const hasAudiences = nodeData.audiences && nodeData.audiences.length > 0;
@@ -48,16 +49,21 @@ function TaxonomyNodeComponent({ data, selected, id }: NodeProps) {
 
   const canHaveChildren = nodeData.level !== 'subtopic';
 
+  // Use custom colors with inline styles
+  const nodeStyle = customColors ? {
+    backgroundColor: customColors.bg,
+    borderColor: customColors.border,
+  } : {};
+
   return (
     <div
       onContextMenu={handleContextMenu}
       className={clsx(
-        'group px-4 py-3 rounded-lg border-2 bg-white shadow-sm min-w-[140px] max-w-[220px] cursor-pointer transition-all relative',
-        colors.border,
-        colors.bg,
+        'group px-4 py-3 rounded-lg border-2 shadow-sm min-w-[140px] max-w-[220px] cursor-pointer transition-all relative',
         isSelected && 'ring-2 ring-blue-500 ring-offset-2',
         nodeData.isHighlighted && 'ring-2 ring-yellow-400'
       )}
+      style={nodeStyle}
       data-level={nodeData.level}
     >
       <Handle
@@ -73,8 +79,14 @@ function TaxonomyNodeComponent({ data, selected, id }: NodeProps) {
 
       {/* Node name with colored dot, centered */}
       <div className="flex items-center justify-center gap-2 mb-1">
-        <div className={clsx('w-2 h-2 rounded-full flex-shrink-0', colors.dot)} />
-        <span className={clsx('font-semibold text-sm text-center', colors.text)}>
+        <div
+          className="w-2 h-2 rounded-full flex-shrink-0"
+          style={customColors ? { backgroundColor: customColors.dot } : {}}
+        />
+        <span
+          className="font-semibold text-sm text-center"
+          style={customColors ? { color: customColors.dot } : {}}
+        >
           {nodeData.label}
         </span>
       </div>

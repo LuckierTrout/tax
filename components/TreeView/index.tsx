@@ -19,9 +19,9 @@ import '@xyflow/react/dist/style.css';
 
 import { TaxonomyNode as TaxonomyNodeComponent } from './TaxonomyNode';
 import { useTreeLayout } from './useTreeLayout';
-import { TaxonomyNode } from '@/types/taxonomy';
+import { TaxonomyNode, TaxonomyLevel, LevelColorConfig } from '@/types/taxonomy';
 import { toReactFlowElements } from '@/lib/tree-utils';
-import { LEVEL_COLORS } from '@/config/levels';
+import { LEVEL_COLORS, DEFAULT_LEVEL_COLORS_HEX } from '@/config/levels';
 import { LayoutGrid, Maximize2, FileDown, Loader2 } from 'lucide-react';
 import { exportReactFlowToPDF } from '@/lib/pdf-export';
 
@@ -33,6 +33,7 @@ interface TreeViewProps {
   selectedPillar: string | null;
   onContextMenu?: (e: React.MouseEvent, nodeId: string) => void;
   onAddChild?: (nodeId: string) => void;
+  levelColors?: Record<TaxonomyLevel, LevelColorConfig>;
 }
 
 const nodeTypes: NodeTypes = {
@@ -47,6 +48,7 @@ function TreeViewInner({
   selectedPillar,
   onContextMenu,
   onAddChild,
+  levelColors,
 }: TreeViewProps) {
   const { getLayoutedElements } = useTreeLayout();
   const { fitView, setNodes, setEdges } = useReactFlow();
@@ -80,24 +82,29 @@ function TreeViewInner({
   // Update node data (selection/highlight state) without changing positions
   useEffect(() => {
     setNodesState((currentNodes) =>
-      currentNodes.map((node) => ({
-        ...node,
-        data: {
-          ...node.data,
-          isSelected: node.id === selectedNodeId,
-          isHighlighted:
-            searchTerm &&
-            taxonomyNodes
-              .find((n) => n.id === node.id)
-              ?.name.toLowerCase()
-              .includes(searchTerm.toLowerCase()),
-          onContextMenu,
-          onAddChild,
-          nodeId: node.id,
-        },
-      }))
+      currentNodes.map((node) => {
+        const nodeLevel = node.data?.level as TaxonomyLevel;
+        const customColors = levelColors?.[nodeLevel] || DEFAULT_LEVEL_COLORS_HEX[nodeLevel];
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            isSelected: node.id === selectedNodeId,
+            isHighlighted:
+              searchTerm &&
+              taxonomyNodes
+                .find((n) => n.id === node.id)
+                ?.name.toLowerCase()
+                .includes(searchTerm.toLowerCase()),
+            onContextMenu,
+            onAddChild,
+            nodeId: node.id,
+            customColors,
+          },
+        };
+      })
     );
-  }, [selectedNodeId, searchTerm, taxonomyNodes, setNodesState, onContextMenu, onAddChild]);
+  }, [selectedNodeId, searchTerm, taxonomyNodes, setNodesState, onContextMenu, onAddChild, levelColors]);
 
   const onNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {
@@ -122,22 +129,27 @@ function TreeViewInner({
     );
 
     // Preserve selection state and context menu handler
-    const nodesWithState = layoutedNodes.map((node) => ({
-      ...node,
-      data: {
-        ...node.data,
-        isSelected: node.id === selectedNodeId,
-        isHighlighted:
-          searchTerm &&
-          taxonomyNodes
-            .find((n) => n.id === node.id)
-            ?.name.toLowerCase()
-            .includes(searchTerm.toLowerCase()),
-        onContextMenu,
-        onAddChild,
-        nodeId: node.id,
-      },
-    }));
+    const nodesWithState = layoutedNodes.map((node) => {
+      const nodeLevel = node.data?.level as TaxonomyLevel;
+      const customColors = levelColors?.[nodeLevel] || DEFAULT_LEVEL_COLORS_HEX[nodeLevel];
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          isSelected: node.id === selectedNodeId,
+          isHighlighted:
+            searchTerm &&
+            taxonomyNodes
+              .find((n) => n.id === node.id)
+              ?.name.toLowerCase()
+              .includes(searchTerm.toLowerCase()),
+          onContextMenu,
+          onAddChild,
+          nodeId: node.id,
+          customColors,
+        },
+      };
+    });
 
     setNodesState(nodesWithState);
     setEdgesState(layoutedEdges);
@@ -146,7 +158,7 @@ function TreeViewInner({
     setTimeout(() => {
       fitView({ padding: 0.2, duration: 300 });
     }, 50);
-  }, [taxonomyNodes, getLayoutedElements, selectedNodeId, searchTerm, setNodesState, setEdgesState, fitView, onContextMenu, onAddChild]);
+  }, [taxonomyNodes, getLayoutedElements, selectedNodeId, searchTerm, setNodesState, setEdgesState, fitView, onContextMenu, onAddChild, levelColors]);
 
   // Fit to screen only (no re-layout)
   const handleFitToScreen = useCallback(() => {
@@ -201,20 +213,14 @@ function TreeViewInner({
 
   // Custom minimap node color based on level
   const nodeColor = useCallback((node: Node) => {
-    const level = node.data?.level;
-    if (level && LEVEL_COLORS[level as keyof typeof LEVEL_COLORS]) {
-      const colors = LEVEL_COLORS[level as keyof typeof LEVEL_COLORS];
-      const colorMap: Record<string, string> = {
-        'bg-purple-500': '#a855f7',
-        'bg-blue-500': '#3b82f6',
-        'bg-green-500': '#22c55e',
-        'bg-yellow-500': '#eab308',
-        'bg-orange-500': '#f97316',
-      };
-      return colorMap[colors.dot] || '#cbd5e1';
+    const level = node.data?.level as TaxonomyLevel;
+    if (level) {
+      // Use custom colors if available, otherwise use defaults
+      const customColors = levelColors?.[level] || DEFAULT_LEVEL_COLORS_HEX[level];
+      return customColors.dot;
     }
     return '#cbd5e1';
-  }, []);
+  }, [levelColors]);
 
   return (
     <div ref={containerRef} className="w-full h-full">

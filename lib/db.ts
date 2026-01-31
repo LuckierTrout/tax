@@ -61,9 +61,16 @@ export async function initializeDatabase(): Promise<void> {
       id INTEGER PRIMARY KEY DEFAULT 1,
       available_audiences TEXT[] NOT NULL,
       available_geographies TEXT[] NOT NULL,
+      level_colors JSONB,
       updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
       CONSTRAINT single_row CHECK (id = 1)
     )
+  `;
+
+  // Add level_colors column if it doesn't exist (for existing databases)
+  await sql`
+    ALTER TABLE taxonomy_settings
+    ADD COLUMN IF NOT EXISTS level_colors JSONB
   `;
 
   // Insert default settings if not exists
@@ -261,7 +268,7 @@ export async function getSettingsFromDb(): Promise<TaxonomySettings> {
   const sql = getDb();
 
   const rows = await sql`
-    SELECT available_audiences, available_geographies
+    SELECT available_audiences, available_geographies, level_colors
     FROM taxonomy_settings
     WHERE id = 1
   `;
@@ -273,6 +280,7 @@ export async function getSettingsFromDb(): Promise<TaxonomySettings> {
   return {
     availableAudiences: rows[0].available_audiences || DEFAULT_SETTINGS.availableAudiences,
     availableGeographies: rows[0].available_geographies || DEFAULT_SETTINGS.availableGeographies,
+    levelColors: rows[0].level_colors || undefined,
   };
 }
 
@@ -281,13 +289,16 @@ export async function updateSettingsInDb(
 ): Promise<TaxonomySettings> {
   const sql = getDb();
 
+  const levelColorsJson = settings.levelColors ? JSON.stringify(settings.levelColors) : null;
+
   const rows = await sql`
     UPDATE taxonomy_settings SET
       available_audiences = COALESCE(${settings.availableAudiences ?? null}, available_audiences),
       available_geographies = COALESCE(${settings.availableGeographies ?? null}, available_geographies),
+      level_colors = COALESCE(${levelColorsJson}::jsonb, level_colors),
       updated_at = NOW()
     WHERE id = 1
-    RETURNING available_audiences, available_geographies
+    RETURNING available_audiences, available_geographies, level_colors
   `;
 
   if (rows.length === 0) {
@@ -297,5 +308,6 @@ export async function updateSettingsInDb(
   return {
     availableAudiences: rows[0].available_audiences,
     availableGeographies: rows[0].available_geographies,
+    levelColors: rows[0].level_colors || undefined,
   };
 }

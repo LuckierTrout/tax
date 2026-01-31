@@ -23,10 +23,18 @@ export interface TaxonomyNode {
 // Levels that support objectives
 export const LEVELS_WITH_OBJECTIVE: TaxonomyLevel[] = ['pillar', 'narrative_theme', 'subject'];
 
+// Color configuration for a single level
+export interface LevelColorConfig {
+  bg: string;      // Background color hex (e.g., "#F5F3FF")
+  border: string;  // Border color hex (e.g., "#A78BFA")
+  dot: string;     // Dot/text color hex (e.g., "#A855F7")
+}
+
 // Settings for managing available options
 export interface TaxonomySettings {
   availableAudiences: string[];
   availableGeographies: string[];
+  levelColors?: Record<TaxonomyLevel, LevelColorConfig>;
 }
 
 export interface TaxonomyData {

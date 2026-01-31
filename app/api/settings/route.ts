@@ -2,9 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getSettings, updateSettings } from '@/lib/storage';
 
+const LevelColorConfigSchema = z.object({
+  bg: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  border: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  dot: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+});
+
+const LevelColorsSchema = z.object({
+  pillar: LevelColorConfigSchema,
+  narrative_theme: LevelColorConfigSchema,
+  subject: LevelColorConfigSchema,
+  topic: LevelColorConfigSchema,
+  subtopic: LevelColorConfigSchema,
+});
+
 const UpdateSettingsSchema = z.object({
   availableAudiences: z.array(z.string().min(1).max(100)).optional(),
   availableGeographies: z.array(z.string().min(1).max(100)).optional(),
+  levelColors: LevelColorsSchema.optional(),
 });
 
 // GET /api/settings - Get current settings

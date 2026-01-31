@@ -487,6 +487,7 @@ export default function TaxonomyPage() {
               selectedPillar={selectedPillarId}
               onContextMenu={handleContextMenu}
               onAddChild={handleAddChildFromTree}
+              levelColors={settings?.levelColors}
             />
           ) : (
             <ColumnView
