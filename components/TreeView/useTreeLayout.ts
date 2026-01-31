@@ -13,8 +13,8 @@ interface LayoutOptions {
 
 // Base dimensions
 const NODE_WIDTH = 220;
-const MIN_GAP_BETWEEN_TIERS = 60; // Minimum vertical gap between tiers
-const HORIZONTAL_NODE_GAP = 50;  // Gap between sibling nodes
+const MIN_GAP_BETWEEN_TIERS = 100; // Minimum vertical gap between tiers
+const HORIZONTAL_NODE_GAP = 50;   // Gap between sibling nodes
 
 // Estimate node height based on content
 function estimateNodeHeight(nodeData: Record<string, unknown>): number {
