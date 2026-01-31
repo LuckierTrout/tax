@@ -18,38 +18,55 @@ const DEFAULT_NODE_HEIGHT = 180;
 
 // ELK layout options optimized for taxonomy/org-chart hierarchies
 const getLayoutOptions = (direction: string = 'DOWN') => ({
+  // Use layered algorithm - designed for hierarchical graphs
   'elk.algorithm': 'layered',
+  // Direction: parents above children
   'elk.direction': direction,
-  // Spacing between nodes at the same level (horizontal)
+
+  // === SPACING ===
+  // Horizontal spacing between sibling nodes
   'elk.spacing.nodeNode': '80',
-  // Spacing between levels/layers (vertical)
-  'elk.layered.spacing.nodeNodeBetweenLayers': '120',
-  // Base spacing value
-  'elk.layered.spacing.baseValue': '50',
+  // Vertical spacing between layers (parent to child)
+  'elk.layered.spacing.nodeNodeBetweenLayers': '150',
+  // Base value for all spacing calculations
+  'elk.layered.spacing.baseValue': '60',
   // Edge spacing
   'elk.spacing.edgeEdge': '30',
-  'elk.spacing.edgeNode': '40',
-  // Edge routing - ORTHOGONAL gives us right-angle connections
-  'elk.edgeRouting': 'ORTHOGONAL',
-  // Layer spacing (between ranks)
-  'elk.layered.spacing.edgeNodeBetweenLayers': '40',
-  'elk.layered.spacing.edgeEdgeBetweenLayers': '20',
-  // Crossing minimization for cleaner layout
+  'elk.spacing.edgeNode': '50',
+  'elk.layered.spacing.edgeNodeBetweenLayers': '50',
+  'elk.layered.spacing.edgeEdgeBetweenLayers': '30',
+
+  // === HIERARCHY ===
+  // Ensure proper layering based on edge direction
+  'elk.layered.layering.strategy': 'NETWORK_SIMPLEX',
+  // Minimize edge crossings
   'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
-  // Node placement strategy - BRANDES_KOEPF gives balanced, centered results
+  // Node placement for balanced layout
   'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
-  // Favor straight edges
+  // Favor straight edges where possible
   'elk.layered.nodePlacement.favorStraightEdges': 'true',
-  // Port alignment
-  'elk.portAlignment.default': 'CENTER',
-  // Consider model order for consistent sibling ordering
+
+  // === EDGE ROUTING ===
+  // Orthogonal (right-angle) edge routing
+  'elk.edgeRouting': 'ORTHOGONAL',
+
+  // === ALIGNMENT ===
+  // How to handle disconnected components
+  'elk.separateConnectedComponents': 'true',
+  'elk.spacing.componentComponent': '100',
+
+  // === QUALITY ===
+  // Higher thoroughness = better results (but slower)
+  'elk.layered.thoroughness': '15',
+
+  // === ORDERING ===
+  // Respect the order nodes are passed in for siblings
   'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
-  // Thoroughness for better results (higher = better but slower)
-  'elk.layered.thoroughness': '10',
 });
 
 /**
  * Converts ReactFlow nodes/edges to ELK graph format
+ * Simplified: no ports, direct node-to-node edges
  */
 function toElkGraph(
   nodes: Node[],
@@ -69,29 +86,11 @@ function toElkGraph(
       id: node.id,
       width: nodeWidth,
       height: nodeHeight,
-      // Define ports for edge connections
-      ports: [
-        {
-          id: `${node.id}-source`,
-          properties: {
-            side: 'SOUTH', // Bottom of node
-          },
-        },
-        {
-          id: `${node.id}-target`,
-          properties: {
-            side: 'NORTH', // Top of node
-          },
-        },
-      ],
-      properties: {
-        'portConstraints': 'FIXED_SIDE',
-      },
     })),
     edges: edges.map((edge) => ({
       id: edge.id,
-      sources: [`${edge.source}-source`],
-      targets: [`${edge.target}-target`],
+      sources: [edge.source],
+      targets: [edge.target],
     })) as ElkExtendedEdge[],
   };
 }
@@ -101,8 +100,7 @@ function toElkGraph(
  */
 function applyLayoutToNodes(
   nodes: Node[],
-  layoutedGraph: ElkNode,
-  nodeWidth: number
+  layoutedGraph: ElkNode
 ): Node[] {
   const layoutMap = new Map<string, { x: number; y: number }>();
 
@@ -129,34 +127,20 @@ function applyLayoutToNodes(
 
 /**
  * Applies ELK edge routing to ReactFlow edges
- * ELK provides bend points for orthogonal routing
  */
 function applyLayoutToEdges(
   edges: Edge[],
   layoutedGraph: ElkNode
 ): Edge[] {
-  const edgeMap = new Map<string, ElkExtendedEdge>();
-
-  layoutedGraph.edges?.forEach((elkEdge) => {
-    edgeMap.set(elkEdge.id, elkEdge);
-  });
-
-  return edges.map((edge) => {
-    const elkEdge = edgeMap.get(edge.id);
-
-    // If ELK provides sections with bend points, we could use them
-    // For now, we rely on ReactFlow's smoothstep with proper node positions
-    return {
-      ...edge,
-      type: 'smoothstep',
-      style: {
-        stroke: '#cbd5e1',
-        strokeWidth: 2,
-      },
-      // Animated false for cleaner look
-      animated: false,
-    };
-  });
+  return edges.map((edge) => ({
+    ...edge,
+    type: 'smoothstep',
+    style: {
+      stroke: '#cbd5e1',
+      strokeWidth: 2,
+    },
+    animated: false,
+  }));
 }
 
 /**
@@ -174,20 +158,21 @@ export function useElkLayout() {
         return { nodes, edges };
       }
 
-      const {
-        nodeWidth = DEFAULT_NODE_WIDTH,
-        nodeHeight = DEFAULT_NODE_HEIGHT
-      } = options;
-
       try {
         // Convert to ELK graph format
         const elkGraph = toElkGraph(nodes, edges, options);
 
+        // Debug: log the graph structure
+        console.log('ELK Input:', JSON.stringify(elkGraph, null, 2));
+
         // Run ELK layout algorithm
         const layoutedGraph = await elk.layout(elkGraph);
 
+        // Debug: log the result
+        console.log('ELK Output:', JSON.stringify(layoutedGraph, null, 2));
+
         // Apply layout results to nodes and edges
-        const layoutedNodes = applyLayoutToNodes(nodes, layoutedGraph, nodeWidth);
+        const layoutedNodes = applyLayoutToNodes(nodes, layoutedGraph);
         const layoutedEdges = applyLayoutToEdges(edges, layoutedGraph);
 
         return { nodes: layoutedNodes, edges: layoutedEdges };
@@ -201,27 +186,4 @@ export function useElkLayout() {
   );
 
   return { getLayoutedElements };
-}
-
-/**
- * Synchronous wrapper that returns a promise
- * Useful for initial render where we want to show loading state
- */
-export function useElkLayoutSync() {
-  const { getLayoutedElements } = useElkLayout();
-
-  const getLayoutedElementsSync = useCallback(
-    (
-      nodes: Node[],
-      edges: Edge[],
-      options: LayoutOptions = {}
-    ): { nodes: Node[]; edges: Edge[]; layoutPromise: Promise<{ nodes: Node[]; edges: Edge[] }> } => {
-      // Return original positions immediately, with a promise for the layout
-      const layoutPromise = getLayoutedElements(nodes, edges, options);
-      return { nodes, edges, layoutPromise };
-    },
-    [getLayoutedElements]
-  );
-
-  return { getLayoutedElementsSync, getLayoutedElements };
 }
