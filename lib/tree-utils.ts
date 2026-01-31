@@ -81,8 +81,9 @@ export function toReactFlowElements(nodes: TaxonomyNode[]): {
       id: `${node.parentId}-${node.id}`,
       source: node.parentId!,
       target: node.id,
-      type: 'step',
+      type: 'smoothstep',
       style: { stroke: '#94a3b8', strokeWidth: 2 },
+      pathOptions: { borderRadius: 8 },
     }));
 
   return { nodes: flowNodes, edges: flowEdges };

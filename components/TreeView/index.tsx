@@ -245,8 +245,9 @@ function TreeViewInner({
         minZoom={0.1}
         maxZoom={2}
         defaultEdgeOptions={{
-          type: 'step',
+          type: 'smoothstep',
           style: { stroke: '#94a3b8', strokeWidth: 2 },
+          pathOptions: { borderRadius: 8 },
         }}
       >
         <Background color="#f1f5f9" gap={20} />
