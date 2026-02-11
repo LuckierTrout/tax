@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { TaxonomyNode, TaxonomySettings, ViewMode, TaxonomyLevel } from '@/types/taxonomy';
 import { filterByPillar, searchNodes, getNodesByLevel } from '@/lib/tree-utils';
-import { getChildLevel, LEVEL_LABELS, LEVEL_CHILDREN } from '@/config/levels';
+import { getChildLevel, LEVEL_LABELS } from '@/config/levels';
 
 import { TreeView, TreeViewExportFunctions } from '@/components/TreeView';
 import { ColumnView } from '@/components/ColumnView';
@@ -319,98 +319,118 @@ export default function TaxonomyPage() {
     });
   }, [contextMenu, nodes]);
 
-  // Move Up: Node becomes sibling of its current parent (one level higher)
+  // Move Up: Swap order with the previous sibling
   const handleMoveUp = useCallback(async () => {
     if (!contextMenu) return;
     const node = nodes.find((n) => n.id === contextMenu.nodeId);
-    if (!node || !node.parentId) return; // Can't move up if no parent (pillar)
+    if (!node) return;
 
-    const parent = nodes.find((n) => n.id === node.parentId);
-    if (!parent) return;
+    // Find siblings sorted by order
+    const siblings = nodes
+      .filter((n) => n.parentId === node.parentId)
+      .sort((a, b) => a.order - b.order);
 
-    // New parent becomes the grandparent (parent's parent)
-    const newParentId = parent.parentId;
-    // New level becomes parent's level
-    const newLevel = parent.level;
+    const currentIndex = siblings.findIndex((s) => s.id === node.id);
+    if (currentIndex <= 0) return; // Already first
+
+    const prevSibling = siblings[currentIndex - 1];
 
     try {
-      const res = await fetch(`/api/taxonomy/${node.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parentId: newParentId, level: newLevel }),
-      });
+      // Swap order values between the two siblings
+      const [res1, res2] = await Promise.all([
+        fetch(`/api/taxonomy/${node.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order: prevSibling.order }),
+        }),
+        fetch(`/api/taxonomy/${prevSibling.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order: node.order }),
+        }),
+      ]);
 
-      if (!res.ok) throw new Error('Failed to move node up');
-      const { node: updatedNode } = await res.json();
+      if (!res1.ok || !res2.ok) throw new Error('Failed to move node up');
+      const { node: updatedNode } = await res1.json();
+      const { node: updatedSibling } = await res2.json();
       setNodes((prev) =>
-        prev.map((n) => (n.id === updatedNode.id ? updatedNode : n))
+        prev.map((n) => {
+          if (n.id === updatedNode.id) return updatedNode;
+          if (n.id === updatedSibling.id) return updatedSibling;
+          return n;
+        })
       );
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Move failed');
     }
   }, [contextMenu, nodes]);
 
-  // Move Down: Node becomes child of one of its siblings (one level lower)
+  // Move Down: Swap order with the next sibling
   const handleMoveDown = useCallback(async () => {
     if (!contextMenu) return;
     const node = nodes.find((n) => n.id === contextMenu.nodeId);
     if (!node) return;
 
-    // Check if node can move down (subtopics can't)
-    const childLevel = LEVEL_CHILDREN[node.level];
-    if (!childLevel) return;
+    // Find siblings sorted by order
+    const siblings = nodes
+      .filter((n) => n.parentId === node.parentId)
+      .sort((a, b) => a.order - b.order);
 
-    // Find siblings (nodes with same parent, excluding self)
-    const siblings = nodes.filter(
-      (n) => n.parentId === node.parentId && n.id !== node.id
-    );
+    const currentIndex = siblings.findIndex((s) => s.id === node.id);
+    if (currentIndex === -1 || currentIndex >= siblings.length - 1) return; // Already last
 
-    if (siblings.length === 0) {
-      alert('No sibling available to become the new parent');
-      return;
-    }
-
-    // Use the first sibling (by order) as the new parent
-    const sortedSiblings = siblings.sort((a, b) => a.order - b.order);
-    const newParent = sortedSiblings[0];
-
-    // New level is child level
-    const newLevel = childLevel;
+    const nextSibling = siblings[currentIndex + 1];
 
     try {
-      const res = await fetch(`/api/taxonomy/${node.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parentId: newParent.id, level: newLevel }),
-      });
+      // Swap order values between the two siblings
+      const [res1, res2] = await Promise.all([
+        fetch(`/api/taxonomy/${node.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order: nextSibling.order }),
+        }),
+        fetch(`/api/taxonomy/${nextSibling.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ order: node.order }),
+        }),
+      ]);
 
-      if (!res.ok) throw new Error('Failed to move node down');
-      const { node: updatedNode } = await res.json();
+      if (!res1.ok || !res2.ok) throw new Error('Failed to move node down');
+      const { node: updatedNode } = await res1.json();
+      const { node: updatedSibling } = await res2.json();
       setNodes((prev) =>
-        prev.map((n) => (n.id === updatedNode.id ? updatedNode : n))
+        prev.map((n) => {
+          if (n.id === updatedNode.id) return updatedNode;
+          if (n.id === updatedSibling.id) return updatedSibling;
+          return n;
+        })
       );
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Move failed');
     }
   }, [contextMenu, nodes]);
 
-  // Helper to check if node can move up (has a parent)
+  // Helper to check if node can move up (has a previous sibling)
   const canMoveUp = useCallback((nodeId: string) => {
     const node = nodes.find((n) => n.id === nodeId);
-    return node ? !!node.parentId : false;
+    if (!node) return false;
+    const siblings = nodes
+      .filter((n) => n.parentId === node.parentId)
+      .sort((a, b) => a.order - b.order);
+    const currentIndex = siblings.findIndex((s) => s.id === node.id);
+    return currentIndex > 0;
   }, [nodes]);
 
-  // Helper to check if node can move down (not subtopic and has siblings)
+  // Helper to check if node can move down (has a next sibling)
   const canMoveDown = useCallback((nodeId: string) => {
     const node = nodes.find((n) => n.id === nodeId);
     if (!node) return false;
-    // Can't move down if already at bottom level
-    if (!LEVEL_CHILDREN[node.level]) return false;
-    // Need siblings to become parent
-    const siblings = nodes.filter(
-      (n) => n.parentId === node.parentId && n.id !== node.id
-    );
-    return siblings.length > 0;
+    const siblings = nodes
+      .filter((n) => n.parentId === node.parentId)
+      .sort((a, b) => a.order - b.order);
+    const currentIndex = siblings.findIndex((s) => s.id === node.id);
+    return currentIndex !== -1 && currentIndex < siblings.length - 1;
   }, [nodes]);
 
   if (isLoading) {

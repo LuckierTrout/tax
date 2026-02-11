@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getNodeById, updateNode, deleteNode } from '@/lib/storage';
 
+const TaxonomyLevelSchema = z.enum([
+  'pillar',
+  'narrative_theme',
+  'subject',
+  'topic',
+  'subtopic',
+]);
+
 const UpdateNodeSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(1000).optional(),
@@ -9,6 +17,9 @@ const UpdateNodeSchema = z.object({
   notes: z.string().max(2000).optional(),
   audiences: z.array(z.string()).optional(),
   geographies: z.array(z.string()).optional(),
+  parentId: z.string().nullable().optional(),
+  level: TaxonomyLevelSchema.optional(),
+  order: z.number().int().min(0).optional(),
 });
 
 // GET /api/taxonomy/[id] - Get a single node
