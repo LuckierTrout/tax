@@ -78,7 +78,7 @@ function TreeViewInner({
 
   // Track the taxonomy data version to know when to re-layout
   const taxonomyVersion = useMemo(() => {
-    return JSON.stringify(taxonomyNodes.map(n => ({ id: n.id, parentId: n.parentId, name: n.name, objective: n.objective })));
+    return JSON.stringify(taxonomyNodes.map(n => ({ id: n.id, parentId: n.parentId, name: n.name, objective: n.objective, order: n.order })));
   }, [taxonomyNodes]);
 
   // Create base elements from taxonomy data (only recalculates when taxonomy changes)

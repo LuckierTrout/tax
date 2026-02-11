@@ -60,7 +60,10 @@ export function toReactFlowElements(nodes: TaxonomyNode[]): {
   nodes: Node[];
   edges: Edge[];
 } {
-  const flowNodes: Node[] = nodes.map((node) => ({
+  // Sort by order so layout algorithm processes children in correct sequence
+  const sorted = [...nodes].sort((a, b) => a.order - b.order);
+
+  const flowNodes: Node[] = sorted.map((node) => ({
     id: node.id,
     type: 'taxonomyNode',
     position: { x: 0, y: 0 }, // Will be calculated by layout
@@ -75,7 +78,7 @@ export function toReactFlowElements(nodes: TaxonomyNode[]): {
     },
   }));
 
-  const flowEdges: Edge[] = nodes
+  const flowEdges: Edge[] = sorted
     .filter((node) => node.parentId !== null)
     .map((node) => ({
       id: `${node.parentId}-${node.id}`,
